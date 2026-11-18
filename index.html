@@ -326,10 +326,17 @@ try{
     import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-auth.js`),
     import(`https://www.gstatic.com/firebasejs/${FBV}/firebase-firestore.js`)]);
   const app=appM.initializeApp(firebaseConfig);
+  // iPhone 主畫面 APP 偶爾會卡在 IndexedDB，先快速檢查，不行就改用其他儲存方式
+  const idbOK=await new Promise(res=>{ let done=false; const fin=v=>{ if(!done){ done=true; res(v); } };
+    setTimeout(()=>fin(false),1500);
+    try{ const r=indexedDB.open("tripsplit_probe"); r.onsuccess=()=>{ try{r.result.close()}catch(_){} fin(true); }; r.onerror=()=>fin(false); r.onblocked=()=>fin(false); }catch(_){ fin(false); } });
   let fs;
-  try{ fs=fsM.initializeFirestore(app,{ignoreUndefinedProperties:true,localCache:fsM.persistentLocalCache({tabManager:fsM.persistentMultipleTabManager()})}); }
+  try{ fs=idbOK?fsM.initializeFirestore(app,{ignoreUndefinedProperties:true,localCache:fsM.persistentLocalCache({tabManager:fsM.persistentMultipleTabManager()})}):fsM.initializeFirestore(app,{ignoreUndefinedProperties:true}); }
   catch(e){ fs=fsM.initializeFirestore(app,{ignoreUndefinedProperties:true}); }
-  FB={app,auth:authM.getAuth(app),A:authM,F:fsM,fs};
+  let auth;
+  try{ auth=authM.initializeAuth(app,{persistence:[authM.browserLocalPersistence,authM.indexedDBLocalPersistence,authM.inMemoryPersistence],popupRedirectResolver:authM.browserPopupRedirectResolver}); }
+  catch(e){ auth=authM.getAuth(app); }
+  FB={app,auth,A:authM,F:fsM,fs,idbOK};
 }catch(e){ console.warn("Firebase 載入失敗，改用本機模式",e); FB=null; }
 
 /* Firestore 不支援「陣列中的陣列」，存取時自動轉換 */
@@ -849,7 +856,7 @@ async function loadRates(){
 }
 let unsubTrips=null;
 function startCloud(user){
-  db=makeDB(); S.mode="cloud"; S.uid=user.uid; S.email=user.email||"";
+  db=makeDB(); S.mode="cloud"; S.uid=user.uid; S.email=user.email||""; S.note="";
   S.myName=user.displayName||"";
   db.doc(`users/${user.uid}/meta/profile`).get().then(d=>{ if(d.exists&&d.data().nickname){ S.myName=d.data().nickname; render(); } }).catch(()=>{});
   const timer=setTimeout(()=>{ if(!S.loaded){ S.note="雲端暫時連不上，先顯示這台手機上的資料"; render(); } },10000);
@@ -871,7 +878,10 @@ async function signIn(){
   const p=new FB.A.GoogleAuthProvider(); p.setCustomParameters({prompt:"select_account"});
   try{ await FB.A.signInWithPopup(FB.auth,p); }
   catch(e){
-    if(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"){ try{ await FB.A.signInWithRedirect(FB.auth,p); }catch(e2){ toast("登入失敗，請稍後再試"); } }
+    console.warn(e);
+    if(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"||e.code==="auth/web-storage-unsupported"){
+      try{ sessionStorage.setItem("tripsplit_redirect","1"); await FB.A.signInWithRedirect(FB.auth,p); }catch(e2){ toast("登入失敗："+(e2.code||"請稍後再試")); } }
+    else if(e.code==="auth/network-request-failed") toast("網路不穩，請確認連線後再試一次");
     else if(e.code!=="auth/popup-closed-by-user"&&e.code!=="auth/cancelled-popup-request") toast("登入失敗："+(e.code||"請稍後再試"));
   }
 }
@@ -884,8 +894,11 @@ async function boot(){
   loadRates();
   let wantLocal=false; try{ wantLocal=localStorage.getItem("tripsplit_mode")==="local"; }catch(e){}
   if(!FB){ startLocal(); S.note="目前無法連線到雲端，先使用本機模式"; render(); return; }
-  try{ await FB.A.getRedirectResult(FB.auth); }catch(e){}
-  FB.A.onAuthStateChanged(FB.auth,user=>{
+  let viaRedirect=false; try{ viaRedirect=sessionStorage.getItem("tripsplit_redirect")==="1"; sessionStorage.removeItem("tripsplit_redirect"); }catch(e){}
+  if(viaRedirect){ try{ await Promise.race([FB.A.getRedirectResult(FB.auth),new Promise(r=>setTimeout(r,5000))]); }catch(e){ toast("登入失敗："+(e.code||"請再試一次")); } }
+  let authSeen=false;
+  setTimeout(()=>{ if(!authSeen&&S.mode==="loading"){ db=null; S.mode="login"; S.uid=null; S.trips={}; S.note="登入服務回應較慢，請按「使用 Google 登入」再試一次"; render(); } },7000);
+  FB.A.onAuthStateChanged(FB.auth,user=>{ authSeen=true;
     if(user){ try{localStorage.removeItem("tripsplit_mode")}catch(e){} startCloud(user); }
     else if(wantLocal){ startLocal(); }
     else { db=null; S.mode="login"; S.uid=null; S.trips={}; render(); }
@@ -938,6 +951,7 @@ function loginView(){
       <div class="tiny" style="letter-spacing:3px;font-family:var(--num)">TRAVEL LEDGER</div>
       <p style="color:var(--ink2);line-height:1.8;margin:18px 0 0">出國記帳、自動換算臺銀匯率<br>跟朋友一起記、回國一鍵分帳</p>
     </div>
+    ${S.note?`<div class="note" style="margin-bottom:16px">${esc(S.note)}</div>`:""}
     ${inv?`<div class="note g" style="margin-bottom:16px">朋友邀請你加入旅程，登入後就能選擇自己的名字加入。</div>`:""}
     <button class="btn" id="gLogin" style="gap:12px"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>使用 Google 登入</button>
     <button class="btn line" id="localTry" style="margin-top:10px">先不登入，在這台手機試用</button>
@@ -945,6 +959,7 @@ function loginView(){
   </div>`;
 }
 function profileSheet(){
+  if(S.mode==="loading"||S.mode==="login"){ signIn(); return; }
   if(S.mode!=="cloud"){
     openSheet(`<h3>帳號</h3><div class="sec-d">目前是本機試用模式，資料只存在這台手機。登入 Google 後可以雲端同步、邀請朋友一起記帳，這台手機上的旅程也能搬到雲端。</div>
       <button class="btn" id="pfLogin">使用 Google 登入</button><button class="btn line" style="margin-top:10px" onclick="closeSheet()">關閉</button>`);
