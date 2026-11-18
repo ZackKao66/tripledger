@@ -96,7 +96,7 @@ body[data-dest] .hero:before{content:"";position:absolute;left:0;right:0;top:0;h
 .bar>i{display:block;height:100%;background:#c9b48a}
 .bar.over>i{background:#d98a6a}
 .budgetline{display:flex;justify-content:space-between;font-size:12px;opacity:.92;margin-top:6px}
-.stickybar{position:sticky;top:0;padding-top:env(safe-area-inset-top)!important;z-index:10;background:var(--bg);padding:0 16px}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--bg);z-index:45}.top.trip{position:sticky;top:0;z-index:11;background:var(--bg)}.stickybar{position:sticky;top:calc(env(safe-area-inset-top) + 76px);z-index:10;background:var(--bg);padding:0 16px}
 .compact{display:none;align-items:center;gap:10px;padding:10px 2px 8px}
 .stickybar.on .compact{display:flex}
 .compact .nm{flex:1;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
