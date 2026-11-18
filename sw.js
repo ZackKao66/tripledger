@@ -1,5 +1,5 @@
 // 旅帳 Service Worker：讓 APP 可以離線開啟
-const VERSION = "tripledger-v1";
+const VERSION = "tripledger-v2";
 const APP_SHELL = ["./", "index.html", "firebase-config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
@@ -17,7 +17,7 @@ self.addEventListener("fetch", e => {
   if (/googleapis\.com|firebaseapp\.com|accounts\.google\.com|securetoken/.test(url.host)) return;
   // 匯率與 APP 本體：優先抓最新，沒網路時用快取
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(req.url, { cache: "no-cache" }).then(res => {
       const copy = res.clone(); if (res.ok) caches.open(VERSION).then(c => c.put(req, copy)); return res;
     }).catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match("index.html"))));
     return;
