@@ -496,7 +496,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.18-c";
+const APP_VER = "2026.11.18-d";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1827,10 +1827,11 @@ const WXC={};
 function wxSpot(t){
   const its=planItems(t,today()).filter(p=>p.geo); if(its.length) return {lat:its[0].geo.lat,lng:its[0].geo.lng,key:`${its[0].geo.lat.toFixed(1)},${its[0].geo.lng.toFixed(1)}`};
   const anyP=Object.values(S.plan||{}).find(p=>p.geo); if(anyP) return {lat:anyP.geo.lat,lng:anyP.geo.lng,key:`${anyP.geo.lat.toFixed(1)},${anyP.geo.lng.toFixed(1)}`};
-  const q=(t.cities||[])[0]||t.country; return q?{q,key:"q:"+q}:null;
+  const c=(t.cities||[])[0]; const q=c?(I18N[c]||c):(WX_CAP[t.iso]||String(t.country||"").replace(/（.*?）|\(.*?\)/g,"").trim()); return q?{q,key:"q:"+q}:null;
 }
+const WX_CAP={TW:"Taipei",JP:"Tokyo",KR:"Seoul",TH:"Bangkok",VN:"Hanoi",HK:"Hong Kong",MO:"Macau",SG:"Singapore",MY:"Kuala Lumpur",PH:"Manila",ID:"Jakarta",CN:"Beijing",US:"New York",GB:"London",FR:"Paris",DE:"Berlin",IT:"Rome",ES:"Madrid",CH:"Zurich",NL:"Amsterdam",AT:"Vienna",AU:"Sydney",NZ:"Auckland",CA:"Toronto",SE:"Stockholm",FI:"Helsinki",PT:"Lisbon",BE:"Brussels",CZ:"Prague",GR:"Athens",HR:"Zagreb",IE:"Dublin",TR:"Istanbul",AE:"Dubai",ZA:"Cape Town",PW:"Koror",GU:"Hagatna"};
 function weatherFor(t){
-  if(!t||t.iso==="TW"&&!(t.cities||[]).length&&!Object.keys(S.plan||{}).length) return null;
+  if(!t) return null;
   const sp=wxSpot(t); if(!sp) return null;
   const ck="tripsplit_wx_"+t.id; const mem=WXC[ck];
   if(mem&&mem.key===sp.key&&Date.now()-mem.at<3600e3) return mem.data;
@@ -1844,8 +1845,8 @@ async function loadWeather(t,sp,ck){
   WXC[ck]={...(WXC[ck]||{}),loading:true};
   try{
     let lat=sp.lat,lng=sp.lng;
-    if(lat==null){ const g=await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&name=${encodeURIComponent(sp.q)}${t.iso?`&countryCode=${t.iso}`:""}`)).json();
-      const r=g.results&&g.results[0]; if(!r){ WXC[ck]={key:sp.key,at:Date.now(),data:null}; return; } lat=r.latitude; lng=r.longitude; }
+    if(lat==null){ const geo=async cc=>(await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&name=${encodeURIComponent(sp.q)}${cc?`&countryCode=${cc}`:""}`)).json()).results?.[0];
+      const r=(await geo(t.iso))||(await geo("")); if(!r){ WXC[ck]={key:sp.key,at:Date.now(),data:null}; return; } lat=r.latitude; lng=r.longitude; }
     const w=await (await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=16`)).json();
     const days={}; (w.daily?.time||[]).forEach((d,i)=>days[d]={code:w.daily.weather_code[i],max:w.daily.temperature_2m_max[i],min:w.daily.temperature_2m_min[i],rain:w.daily.precipitation_probability_max[i]});
     const data={now:w.current?{temp:w.current.temperature_2m,code:w.current.weather_code}:null,days,localToday:(w.current?.time||"").slice(0,10)};
