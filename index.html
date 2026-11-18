@@ -496,6 +496,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
+const APP_VER = "2026.11.18-c";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1147,7 +1148,8 @@ function profileSheet(focusPay){
     <button class="btn" id="pfSave" style="margin-top:16px">儲存</button>
     ${pushSection()}
     ${langRow()}
-    <button class="btn line" id="pfOut" style="margin-top:22px">登出</button>`);
+    <button class="btn line" id="pfOut" style="margin-top:22px">登出</button>
+    <div class="tiny" style="text-align:center;margin-top:14px" data-notr>旅帳 v${APP_VER}</div>`);
   const readPrefs=()=>Object.fromEntries(PUSH_TYPES.map(([k])=>[k,!!$(`[data-pt="${k}"]`)?.classList.contains("on")]));
   const showSubs=on=>{ $("#pushMaster")?.classList.toggle("on",on); const x=$("#pushSubs"); if(x) x.style.display=on?"":"none"; };
   $("#pushMaster")&&($("#pushMaster").onclick=async()=>{
