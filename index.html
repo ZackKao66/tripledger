@@ -316,7 +316,8 @@ input,select,textarea,.inp,.inp.sm,.fbar .inp,.fpanel select,.cursel{font-size:1
 
 <script type="module">
 /* ===================== Firebase ===================== */
-import { firebaseConfig } from "./firebase-config.js";
+import * as CFG from "./firebase-config.js";
+const firebaseConfig=CFG.firebaseConfig; const PUSH=CFG.pushConfig||{};
 const FBV="10.12.2";
 let FB=null;
 try{
@@ -958,9 +959,19 @@ function profileSheet(){
     <input class="inp" id="pfName" maxlength="20" value="${esc(S.myName||"")}" placeholder="旅伴會看到的名字">
     <div class="tiny" style="margin-top:6px">建立或加入新旅程時預設使用這個名字。每趟旅程也可以在「設定 › 旅伴與邀請」另外改。</div>
     <button class="btn" id="pfSave" style="margin-top:16px">儲存</button>
-    <button class="btn line" id="pfOut" style="margin-top:10px">登出</button>`);
+    ${pushSection()}
+    <button class="btn line" id="pfOut" style="margin-top:22px">登出</button>`);
+  const readPrefs=()=>Object.fromEntries(PUSH_TYPES.map(([k])=>[k,!!$(`[data-pt="${k}"]`)?.checked]));
+  $("#pushOn")&&($("#pushOn").onclick=()=>enablePush(readPrefs()).then(ok=>{ if(ok) closeSheet(); }));
+  $("#pushOff")&&($("#pushOff").onclick=()=>{ closeSheet(); disablePush(); });
   $("#pfSave").onclick=lock(async()=>{ const n=$("#pfName").value.trim().slice(0,20); if(!n){toast("請輸入名字");return}
-    try{ await db.doc(`users/${S.uid}/meta/profile`).set({nickname:n,updatedAt:Date.now()}); S.myName=n; closeSheet(); toast("已更新顯示名稱"); render(); }catch(e){} });
+    try{ await db.doc(`users/${S.uid}/meta/profile`).set({nickname:n,updatedAt:Date.now()}); S.myName=n; closeSheet();
+      const diff=Object.values(S.trips).filter(t=>(t.members||[]).some(m=>m.uid===S.uid&&m.name!==n));
+      if(diff.length&&await confirmBox(`要把 ${diff.length} 趟旅程裡你的名字也改成「${n}」嗎？`,"一起改",false)){
+        for(const t of diff){ await Store.saveTrip({...t,members:t.members.map(m=>m.uid===S.uid?{...m,name:n}:m)}).catch(()=>{}); }
+        toast("已更新所有旅程的名字");
+      } else toast("已更新顯示名稱");
+      render(); }catch(e){} });
   $("#pfOut").onclick=async()=>{ if(!await confirmBox("確定登出？這台手機上的雲端資料會在下次登入時重新同步。","登出",false))return; closeSheet(); signOutNow(); };
 }
 function homeView(){
@@ -969,7 +980,7 @@ function homeView(){
   return `
   <div class="top"><div class="brand"><h1>旅帳</h1><div class="en">TRAVEL LEDGER</div></div>${statusTag()}<button class="iconbtn" id="themeBtn" aria-label="切換外觀">${ic("moon")}</button>
     <button class="iconbtn" id="meBtn" aria-label="我的帳號" style="overflow:hidden;padding:0">${S.mode==="cloud"&&FB?.auth?.currentUser?.photoURL?`<img src="${esc(FB.auth.currentUser.photoURL)}" alt="" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover">`:ic("user")}</button></div>
-  ${installBanner()}
+  ${installBanner()}${pushBanner()}
   ${offlineBanner()}
   <div class="wrap">
     ${S.note?`<div class="note">${esc(S.note)}</div>`:""}
@@ -1001,6 +1012,8 @@ function bindHome(){
   $("#gLogin")&&($("#gLogin").onclick=signIn);
   $("#localTry")&&($("#localTry").onclick=()=>{ try{localStorage.setItem("tripsplit_mode","local")}catch(e){} startLocal(); });
   $("#instBtn")&&($("#instBtn").onclick=installApp);
+  $("#pushBn")&&($("#pushBn").onclick=()=>enablePush(Object.fromEntries(PUSH_TYPES.map(([k])=>[k,true]))));
+  $("#pushX")&&($("#pushX").onclick=()=>{ try{localStorage.setItem("tripsplit_push_hide","1")}catch(e){} render(); });
   $("#instX")&&($("#instX").onclick=()=>{ try{localStorage.setItem("tripsplit_inst_hide","1")}catch(e){} render(); });
   $("#importBtn")&&($("#importBtn").onclick=()=>{ const f=$("#backupPick"); f.value=""; f.onchange=async()=>{ const file=f.files[0]; if(!file) return; try{ const data=JSON.parse(await file.text()); await importBackup(data); }catch(e){ toast("無法讀取這個備份檔"); } }; f.click(); });
   $("#migrateBtn")&&($("#migrateBtn").onclick=lock(async()=>migrateLocal()));
@@ -1325,6 +1338,62 @@ async function migrateLocal(){
   }
   toast(ok?`已搬移 ${ok} 個旅程到雲端`:"搬移未完成"); render();
 }
+
+/* --- 推播通知 --- */
+const PUSH_TYPES=[["expense","旅伴新增、修改或刪除帳目"],["kitty","公費繳交與餘額不足"],["settle","付款與確認收款"],["member","新旅伴加入旅程"]];
+const pushOK=()=>!!(PUSH.url&&PUSH.vapidPublicKey&&"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window);
+const pushPrefs=()=>{ try{ return JSON.parse(localStorage.getItem("tripsplit_push")||"null"); }catch(e){ return null; } };
+const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((s.length+3)%4)),c=>c.charCodeAt(0));
+async function pushPost(path,body){
+  const idToken=await FB.auth.currentUser.getIdToken();
+  const r=await fetch(PUSH.url.replace(/\/$/,"")+path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({idToken,...body}),keepalive:true});
+  if(!r.ok) throw new Error("push "+r.status); return r.json();
+}
+async function enablePush(prefs){
+  const perm=await Notification.requestPermission();
+  if(perm!=="granted"){ toast(perm==="denied"?"通知被關閉了，請到 iPhone「設定 › 通知 › 旅帳」開啟":"沒有開啟通知"); return false; }
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:unb64u(PUSH.vapidPublicKey)});
+    await pushPost("/subscribe",{sub:sub.toJSON(),prefs});
+    try{ localStorage.setItem("tripsplit_push",JSON.stringify(prefs)); }catch(e){}
+    toast("已開啟通知"); render(); return true;
+  }catch(e){ console.warn(e); toast("開啟通知失敗，請稍後再試"); return false; }
+}
+async function disablePush(){
+  try{ const reg=await navigator.serviceWorker.ready; const sub=await reg.pushManager.getSubscription();
+    if(sub){ await pushPost("/unsubscribe",{endpoint:sub.endpoint}).catch(()=>{}); await sub.unsubscribe(); } }catch(e){}
+  try{ localStorage.removeItem("tripsplit_push"); }catch(e){}
+  toast("已關閉通知"); render();
+}
+const myMid=t=>(t.members||[]).find(m=>m.uid&&m.uid===S.uid)?.id;
+const whoAmI=t=>{ const id=myMid(t); return id?memberName(t,id):(S.myName||"旅伴"); };
+function notify(t,type,body,tag){
+  if(S.mode!=="cloud"||!PUSH.url||!FB?.auth?.currentUser||!t) return;
+  pushPost("/notify",{tripId:t.id,type,title:t.name,body,tag}).catch(()=>{});
+}
+function notifyKittyLow(t,before,after,total){
+  if(t.kitty?.enabled&&total>0&&before/total>=.15&&after/total<.15) notify(t,"kitty",`公費餘額只剩 ${mT(t,Math.max(0,after))}，不到 15%，記得補繳`,"kitty-low");
+}
+function pushSection(){
+  if(S.mode!=="cloud") return "";
+  if(!PUSH.url) return "";
+  if(isIOS()&&!isStandalone()) return `<label class="l">通知</label><div class="note">要收到旅伴記帳通知，請先把旅帳「加入主畫面」，再從桌面的旅帳開啟。</div>`;
+  if(!pushOK()) return `<label class="l">通知</label><div class="note">這個瀏覽器不支援通知。</div>`;
+  if(Notification.permission==="denied") return `<label class="l">通知</label><div class="note">通知已被關閉。iPhone 請到「設定 › 通知 › 旅帳」開啟；Android 請長按旅帳圖示 › App 資訊 › 通知開啟，再回來這裡。</div>`;
+  const p=pushPrefs(); const on=!!p&&Notification.permission==="granted";
+  return `<label class="l">通知</label>
+    <div class="sec tight">${PUSH_TYPES.map(([k,n])=>`<label class="prow" style="cursor:pointer"><span class="grow">${n}</span><input type="checkbox" data-pt="${k}" ${!p||p[k]!==false?"checked":""} style="width:20px;height:20px;accent-color:var(--ink)"></label>`).join("")}</div>
+    <button class="btn ${on?"line":""}" id="pushOn" style="margin-top:10px">${on?"更新通知設定":"開啟通知"}</button>
+    ${on?`<button class="lnk" id="pushOff" style="margin-top:10px;display:block">關閉這台手機的通知</button>`:""}`;
+}
+function pushBanner(){
+  if(S.mode!=="cloud"||!pushOK()||!isStandalone()||Notification.permission!=="default"||pushPrefs()) return "";
+  let hide=false; try{ hide=!!localStorage.getItem("tripsplit_push_hide"); }catch(e){} if(hide) return "";
+  return `<div class="banner g" style="margin:0 16px 12px">${ic("bell")}<span class="grow">開啟通知，旅伴記帳時馬上收到，就像 LINE 訊息</span><button class="btn xs" id="pushBn">開啟</button><button class="iconbtn" id="pushX" aria-label="不再顯示" style="width:36px;height:36px;border:none">${ic("x")}</button></div>`;
+}
+if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message",e=>{ const u=e.data&&e.data.open; if(u){ const h=new URL(u,location.href).hash; if(h&&location.hash!==h) location.hash=h; } });
 
 /* --- 安裝到主畫面 --- */
 let deferredPrompt=null;
@@ -1656,9 +1725,9 @@ function bindTripRest(t){
     const [fromP,toP,x]=b.dataset.pay.split("|");
     if(!await confirmBox(`確認 ${nameOf(t,fromP)} 已付給 ${nameOf(t,toP)} ${mT(t,+x)}${useLocal(t)?`（${ntdT(+x)}）`:""}？`,"已付款",false))return;
     const e={id:uid(),kind:"transfer",from:repOf(t,fromP),to:repOf(t,toP),fromP,toP,twd:+x,date:today(),confirmed:false,createdBy:S.uid||null,createdAt:Date.now()};
-    try{await Store.save(t.id,e); toast("已記錄，等待收款人確認")}catch(_){}
+    try{await Store.save(t.id,e); notify(t,"settle",`${nameOf(t,fromP)} 已付給 ${nameOf(t,toP)} ${mT(t,+x)}，請收款人確認`); toast("已記錄，等待收款人確認")}catch(_){}
   }));
-  $$("[data-confirm]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.confirm]; if(!e)return; try{await Store.save(t.id,{...e,confirmed:true,confirmedBy:S.uid||null,confirmedAt:Date.now()}); toast("已確認收款")}catch(_){}});
+  $$("[data-confirm]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.confirm]; if(!e)return; try{await Store.save(t.id,{...e,confirmed:true,confirmedBy:S.uid||null,confirmedAt:Date.now()}); notify(t,"settle",`${nameOf(t,e.toP||e.to)} 已確認收到 ${nameOf(t,e.fromP||e.from)} 的 ${mT(t,e.twd)}`); toast("已確認收款")}catch(_){}});
   $$("[data-undo]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.undo]; if(!e)return; try{await Store.del(t.id,e); undoDelete(t.id,e,"已撤銷轉帳紀錄")}catch(_){}});
   if($("#setStart")&&!RO()){ const n=()=>{$("#setLen").textContent=tripLen($("#setStart").value,$("#setEnd").value)}; linkDates($("#setStart"),$("#setEnd"),n); n(); }
   $("#addMember")&&($("#addMember").onclick=async()=>{
@@ -1759,12 +1828,12 @@ function claimSheet(t){
   $$("[data-claim]").forEach(el=>el.onclick=lock(async()=>{
     const cur=S.trips[t.id]||t;
     const ms=cur.members.map(m=>m.id===el.dataset.claim?{...m,uid:S.uid}:m);
-    try{await Store.saveTrip({...cur,members:ms}); closeSheet(); toast("已加入旅程"); setTimeout(()=>Store.watch(t.id),800);}catch(e){}
+    try{await Store.saveTrip({...cur,members:ms}); closeSheet(); toast("已加入旅程"); setTimeout(()=>{ Store.watch(t.id); notify(S.trips[t.id]||cur,"member",`${(ms.find(m=>m.uid===S.uid)||{}).name||S.myName} 加入了旅程`); },1500);}catch(e){}
   }));
   $("#claimNew").onclick=lock(async()=>{
     const n=$("#claimName").value.trim(); if(!n){toast("請輸入名字");return}
     const cur=S.trips[t.id]||t;
-    try{await Store.saveTrip({...cur,members:[...cur.members,{id:uid(),name:n.slice(0,20),uid:S.uid}]}); closeSheet(); toast("已加入旅程"); setTimeout(()=>Store.watch(t.id),800);}catch(e){}
+    try{await Store.saveTrip({...cur,members:[...cur.members,{id:uid(),name:n.slice(0,20),uid:S.uid}]}); closeSheet(); toast("已加入旅程"); setTimeout(()=>{ Store.watch(t.id); notify(S.trips[t.id]||cur,"member",`${n.slice(0,20)} 加入了旅程`); },1500);}catch(e){}
   });
 }
 
@@ -1963,6 +2032,7 @@ function kitInSheet(t,old){
         const e={...(old||{}),id:old?.id||uid(),kind:"kitty_in",member:mid,cur:c,amount:v.a,twd:r2(v.a*rate),date:$("#kd").value||today(),createdBy:old?.createdBy||S.uid||null,createdAt:old?.createdAt||Date.now(),updatedBy:S.uid||null,updatedAt:Date.now()};
         await Store.save(t.id,e);
       }
+      notify(t,"kitty",list.length>1?`${whoAmI(t)} 記錄全員各繳公費 ${curT(v.a,$("#kc").value)}`:`${whoAmI(t)} 記錄公費：${nameOf(t,list[0])} 繳交 ${curT(v.a,$("#kc").value)}`);
       closeSheet(); toast("已記錄公費");
     }catch(_){}
   }));
@@ -2285,9 +2355,13 @@ function expSheet(t,old,draft){
       payer:st.private?me:st.payer,split:st.private?[me]:st.split,splitMode:st.private?"equal":(st.splitMode==="unit"&&!UN?"equal":st.splitMode),weights:st.private?{}:weights,groups:st.private?null:groups,private:!!st.private,
       createdBy:old?.createdBy||S.uid||null,createdAt:old?.createdAt||Date.now(),updatedBy:S.uid||null,updatedAt:Date.now(),
       hasReceipt:!!(rcData||(old?.hasReceipt&&!rcRemoved))};
+    const C0=t.kitty?.enabled?compute(t):null;
     try{
       if(old && !!old.private!==!!e.private) await Store.del(t.id,old);
       await Store.save(t.id,e);
+      if(!e.private){ const lb=e.title||catOf(t,e.cat).name;
+        notify(t,"expense",`${whoAmI(t)} ${isNew||old?.private?"記了一筆":"修改了"}：${lb} ${curT(e.amount,e.cur)}${e.payer===KITTY?"（公費付）":e.payer&&e.payer!==myMid(t)?`（${nameOf(t,e.payer)} 付）`:""}`);
+        if(C0&&(e.payer===KITTY||old?.payer===KITTY)){ const after=C0.kittyBal-(e.payer===KITTY?finalTWD(e):0)+(old&&!old.private&&old.payer===KITTY?finalTWD(old):0); notifyKittyLow(t,C0.kittyBal,after,C0.kittyIn); } }
       if(rcData) await Store.saveReceipt(t.id,e,rcData).catch(()=>toast("收據照片未能儲存"));
       else if(rcRemoved&&old?.hasReceipt) Store.delReceipt(t.id,old).catch(()=>{});
       closeSheet(); toast(isNew?`已記錄 ${ntdT(finalTWD(e))}`:"已更新");
@@ -2299,7 +2373,7 @@ function expSheet(t,old,draft){
   };
   $("#esave")&&($("#esave").onclick=lock(doSave));
   $("#edup")&&($("#edup").onclick=()=>{ const d={...st,date:today(),actualTWD:"",hasReceipt:false,_rc:null}; expSheet(t,null,d); toast("已複製，確認後儲存"); });
-  $("#edel")&&($("#edel").onclick=async()=>{ try{await Store.del(t.id,old); closeSheet(); undoDelete(t.id,old,`已刪除「${old.title||catOf(t,old.cat).name}」`)}catch(e){} });
+  $("#edel")&&($("#edel").onclick=async()=>{ try{await Store.del(t.id,old); if(!old.private) notify(t,"expense",`${whoAmI(t)} 刪除了：${old.title||catOf(t,old.cat).name} ${curT(old.amount,old.cur)}`); closeSheet(); undoDelete(t.id,old,`已刪除「${old.title||catOf(t,old.cat).name}」`)}catch(e){} });
 }
 
 /* 地點（Google 地圖連結） */
