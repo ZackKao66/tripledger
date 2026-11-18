@@ -289,6 +289,12 @@ details.set>summary .s{font-size:12.5px;color:var(--sub);margin-top:3px;white-sp
 details.set>summary svg.i{color:var(--sub);transition:transform .2s}
 details.set[open]>summary svg.i{transform:rotate(90deg)}
 details.set .body{padding:0 18px 18px;border-top:1px solid var(--line2);padding-top:14px}
+.invcard{background:var(--ic,var(--ink));color:#f3efe6;border-radius:20px;padding:20px 20px 16px;margin-bottom:18px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.invcard .tiny{color:inherit}
+.invcard .ivn{font-family:"Noto Serif TC",serif;font-size:24px;font-weight:700;margin:8px 0 4px;line-height:1.3}
+.invcard .ivs{margin:14px 0 0;padding:12px 0 0 20px;border-top:1px solid rgba(243,239,230,.2);font-size:14px;line-height:1.9;opacity:.92}
+.payinfo{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--pri-soft,var(--line2));}
+.payinfo .pi{font-size:14px;font-weight:600;white-space:pre-wrap;word-break:break-all;line-height:1.5;margin-top:2px}
 .bnav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:480px;display:flex;align-items:flex-end;justify-content:space-around;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:4px 8px calc(6px + env(safe-area-inset-bottom));z-index:30}
 .bnav button[data-tab]{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11.5px;color:var(--sub);min-height:54px}
 .bnav button[data-tab] svg.i{width:22px;height:22px}
@@ -537,7 +543,9 @@ function undoDelete(tid,e,label="已刪除"){ toast(label,{label:"復原",fn:asy
 /* 主題 */
 const THEMES=["auto","light","dark"], THEME_N={auto:"跟隨系統",light:"淺色",dark:"深色"};
 function getTheme(){try{return localStorage.getItem("tripsplit_theme")||"auto"}catch(e){return "auto"}}
-function applyTheme(m){ if(m==="auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme",m); }
+function applyTheme(m){ if(m==="auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme",m); syncThemeColor(); }
+function syncThemeColor(){ try{ const bg=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||getComputedStyle(document.body).backgroundColor; document.querySelectorAll('meta[name="theme-color"]').forEach(x=>x.setAttribute("content",bg)); }catch(e){} }
+try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>setTimeout(syncThemeColor,50)); }catch(e){}
 function cycleTheme(){ const m=THEMES[(THEMES.indexOf(getTheme())+1)%3]; try{localStorage.setItem("tripsplit_theme",m)}catch(e){} applyTheme(m); toast("外觀："+THEME_N[m]); }
 applyTheme(getTheme());
 /* 算式 */
@@ -858,7 +866,7 @@ let unsubTrips=null;
 function startCloud(user){
   db=makeDB(); S.mode="cloud"; S.uid=user.uid; S.email=user.email||""; S.note="";
   S.myName=user.displayName||"";
-  db.doc(`users/${user.uid}/meta/profile`).get().then(d=>{ if(d.exists&&d.data().nickname){ S.myName=d.data().nickname; render(); } }).catch(()=>{});
+  db.doc(`users/${user.uid}/meta/profile`).get().then(d=>{ if(d.exists){ const p=d.data(); if(p.nickname) S.myName=p.nickname; S.myPay=p.payInfo||""; render(); } }).catch(()=>{});
   const timer=setTimeout(()=>{ if(!S.loaded){ S.note="雲端暫時連不上，先顯示這台手機上的資料"; render(); } },10000);
   if(unsubTrips) unsubTrips();
   unsubTrips=db.collection("trips").where("memberUids","array-contains",user.uid).onSnapshot(snap=>{
@@ -887,7 +895,7 @@ async function signIn(){
 }
 async function signOutNow(){ try{ if(unsubTrips){unsubTrips();unsubTrips=null} Store.unwatch(); await FB.A.signOut(FB.auth); S.trips={}; S.tripId=null; setHash("trips"); }catch(e){} }
 async function boot(){
-  render();
+  render(); syncThemeColor();
   window.addEventListener("hashchange",onHash);
   S.dl={save:async({filename,data})=>{ const blob=data instanceof Blob?data:new Blob([data]); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},5000); return {status:"saved"}; }};
   S.canImg=false; S.sample=null;
@@ -942,23 +950,33 @@ function statusTag(){
   if(isCloud()) return `<span class="status" id="status" title="${RO()?"檢視中":"已同步"}"><i></i><span class="st">${RO()?"檢視中":"已同步"}</span></span>`;
   return `<span class="status local" id="status" title="本機試用"><i></i><span class="st">本機試用</span></span>`;
 }
+function inviteInfo(){ const q=new URLSearchParams(location.search); return {n:q.get("n")||"",by:q.get("by")||"",c:(q.get("c")||"").toUpperCase(),d:q.get("d")||""}; }
+function inviteCard(){
+  const v=inviteInfo(); const fl=v.c&&FLAG[v.c];
+  return `<div class="invcard" style="${fl?`--ic:${fl.hero||"var(--ink)"}`:""}">
+    <div class="tiny" style="letter-spacing:2px;opacity:.8">${v.by?`${esc(v.by)} 邀請你一起記帳`:"朋友邀請你一起記帳"}</div>
+    <div class="ivn">${esc(v.n||"一起出發的旅程")}</div>
+    ${v.d?`<div class="tiny num" style="opacity:.85">${esc(v.d)}</div>`:""}
+    <ol class="ivs"><li>用 Google 登入</li><li>選擇你是哪一位旅伴</li><li>開始一起記帳，回國一鍵分帳</li></ol>
+  </div>`;
+}
 function loginView(){
   const inv=/^#trip-/.test(location.hash||"");
   return `<div class="wrap" style="min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;padding-top:env(safe-area-inset-top)">
-    <div style="text-align:center;margin-bottom:34px">
+    ${inv?`<div class="row" style="justify-content:center;gap:10px;margin-bottom:18px"><img src="icons/icon-192.png" alt="" style="width:36px;height:36px;border-radius:10px"><b style="font-family:'Noto Serif TC',serif;font-size:20px;letter-spacing:3px">旅帳</b></div>`:`<div style="text-align:center;margin-bottom:34px">
       <img src="icons/icon-192.png" alt="" style="width:84px;height:84px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.18)">
       <h1 style="font-family:'Noto Serif TC',serif;font-size:32px;letter-spacing:4px;margin:18px 0 4px">旅帳</h1>
       <div class="tiny" style="letter-spacing:3px;font-family:var(--num)">TRAVEL LEDGER</div>
       <p style="color:var(--ink2);line-height:1.8;margin:18px 0 0">出國記帳、自動換算臺銀匯率<br>跟朋友一起記、回國一鍵分帳</p>
-    </div>
+    </div>`}
     ${S.note?`<div class="note" style="margin-bottom:16px">${esc(S.note)}</div>`:""}
-    ${inv?`<div class="note g" style="margin-bottom:16px">朋友邀請你加入旅程，登入後就能選擇自己的名字加入。</div>`:""}
+    ${inv?inviteCard():""}
     <button class="btn" id="gLogin" style="gap:12px"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>使用 Google 登入</button>
     <button class="btn line" id="localTry" style="margin-top:10px">先不登入，在這台手機試用</button>
     <div class="tiny" style="text-align:center;margin-top:16px;line-height:1.7">登入後帳目會存在雲端，換手機也不會遺失<br>只有加入同一趟旅程的旅伴看得到那趟的帳</div>
   </div>`;
 }
-function profileSheet(){
+function profileSheet(focusPay){
   if(S.mode==="loading"||S.mode==="login"){ signIn(); return; }
   if(S.mode!=="cloud"){
     openSheet(`<h3>帳號</h3><div class="sec-d">目前是本機試用模式，資料只存在這台手機。登入 Google 後可以雲端同步、邀請朋友一起記帳，這台手機上的旅程也能搬到雲端。</div>
@@ -973,19 +991,25 @@ function profileSheet(){
     <label class="l">我的顯示名稱</label>
     <input class="inp" id="pfName" maxlength="20" value="${esc(S.myName||"")}" placeholder="旅伴會看到的名字">
     <div class="tiny" style="margin-top:6px">建立或加入新旅程時預設使用這個名字。每趟旅程也可以在「設定 › 旅伴與邀請」另外改。</div>
+    <label class="l">我的收款方式</label>
+    <textarea class="inp" id="pfPay" rows="2" maxlength="120" placeholder="例：國泰世華 013 1234-5678-9012&#10;或 LINE Pay／街口帳號" style="resize:none;line-height:1.5">${esc(S.myPay||"")}</textarea>
+    <div class="tiny" style="margin-top:6px">結算時會顯示給要轉帳給你的旅伴，只有同一趟旅程的人看得到。</div>
     <button class="btn" id="pfSave" style="margin-top:16px">儲存</button>
     ${pushSection()}
     <button class="btn line" id="pfOut" style="margin-top:22px">登出</button>`);
   const readPrefs=()=>Object.fromEntries(PUSH_TYPES.map(([k])=>[k,!!$(`[data-pt="${k}"]`)?.checked]));
   $("#pushOn")&&($("#pushOn").onclick=()=>enablePush(readPrefs()).then(ok=>{ if(ok) closeSheet(); }));
   $("#pushOff")&&($("#pushOff").onclick=()=>{ closeSheet(); disablePush(); });
+  if(focusPay) setTimeout(()=>{ const x=$("#pfPay"); if(x){ x.scrollIntoView({block:"center"}); x.focus(); } },250);
   $("#pfSave").onclick=lock(async()=>{ const n=$("#pfName").value.trim().slice(0,20); if(!n){toast("請輸入名字");return}
-    try{ await db.doc(`users/${S.uid}/meta/profile`).set({nickname:n,updatedAt:Date.now()}); S.myName=n; closeSheet();
-      const diff=Object.values(S.trips).filter(t=>(t.members||[]).some(m=>m.uid===S.uid&&m.name!==n));
-      if(diff.length&&await confirmBox(`要把 ${diff.length} 趟旅程裡你的名字也改成「${n}」嗎？`,"一起改",false)){
-        for(const t of diff){ await Store.saveTrip({...t,members:t.members.map(m=>m.uid===S.uid?{...m,name:n}:m)}).catch(()=>{}); }
-        toast("已更新所有旅程的名字");
-      } else toast("已更新顯示名稱");
+    const pay=$("#pfPay").value.trim().slice(0,120);
+    try{ await db.doc(`users/${S.uid}/meta/profile`).set({nickname:n,payInfo:pay,updatedAt:Date.now()}); S.myName=n; S.myPay=pay; closeSheet();
+      const mine=Object.values(S.trips).filter(t=>(t.members||[]).some(m=>m.uid===S.uid));
+      const nameDiff=mine.filter(t=>t.members.some(m=>m.uid===S.uid&&m.name!==n));
+      const both=nameDiff.length&&await confirmBox(`要把 ${nameDiff.length} 趟旅程裡你的名字也改成「${n}」嗎？`,"一起改",false);
+      for(const t of mine){ const m0=t.members.find(m=>m.uid===S.uid); const wantName=both&&m0.name!==n;
+        if((m0.payInfo||"")!==pay||wantName) await Store.saveTrip({...t,members:t.members.map(m=>m.uid===S.uid?{...m,payInfo:pay,...(wantName?{name:n}:{})}:m)}).catch(()=>{}); }
+      toast(both?"已更新所有旅程的名字與收款方式":"已儲存");
       render(); }catch(e){} });
   $("#pfOut").onclick=async()=>{ if(!await confirmBox("確定登出？這台手機上的雲端資料會在下次登入時重新同步。","登出",false))return; closeSheet(); signOutNow(); };
 }
@@ -1384,10 +1408,14 @@ async function disablePush(){
 }
 const myMid=t=>(t.members||[]).find(m=>m.uid&&m.uid===S.uid)?.id;
 const whoAmI=t=>{ const id=myMid(t); return id?memberName(t,id):(S.myName||"旅伴"); };
-function notify(t,type,body,tag){
-  if(S.mode!=="cloud"||!PUSH.url||!FB?.auth?.currentUser||!t) return;
-  pushPost("/notify",{tripId:t.id,type,title:t.name,body,tag}).catch(()=>{});
+function notify(t,type,body,tag,to){
+  if(S.mode!=="cloud"||!PUSH.url||!FB?.auth?.currentUser||!t) return Promise.resolve(null);
+  return pushPost("/notify",{tripId:t.id,type,title:t.name,body,tag,...(to?{to}:{})}).catch(()=>null);
 }
+/* 一個「結算對象」（個人、一組或公費）對應到哪些旅伴 */
+const partyMembers=(t,pid)=>{ if(pid===KITTY) return t.kitty?.keeper?[t.kitty.keeper]:[]; const u=findUnit(t,pid); return u?u.members:[pid]; };
+const partyUids=(t,pid)=>partyMembers(t,pid).map(id=>(t.members||[]).find(m=>m.id===id)?.uid).filter(Boolean);
+const partyPay=(t,pid)=>{ for(const id of partyMembers(t,pid)){ const m=(t.members||[]).find(x=>x.id===id); if(m?.payInfo) return {name:m.name,info:m.payInfo}; } return null; };
 function notifyKittyLow(t,before,after,total){
   if(t.kitty?.enabled&&total>0&&before/total>=.15&&after/total<.15) notify(t,"kitty",`公費餘額只剩 ${mT(t,Math.max(0,after))}，不到 15%，記得補繳`,"kitty-low");
 }
@@ -1461,7 +1489,7 @@ function onboarding(force){
 async function createDemo(){
   const ids={me:uid(),amy:uid(),nan:uid(),zeng:uid()};
   const st=addDays(today(),-1);
-  const members=[{id:ids.me,name:S.myName||"我",...(S.uid?{uid:S.uid}:{})},{id:ids.amy,name:"Amy"},{id:ids.nan,name:"南西"},{id:ids.zeng,name:"小曾"}];
+  const members=[{id:ids.me,name:S.myName||"我",...(S.uid?{uid:S.uid}:{}),...(S.myPay?{payInfo:S.myPay}:{})},{id:ids.amy,name:"Amy"},{id:ids.nan,name:"南西"},{id:ids.zeng,name:"小曾"}];
   const t={id:uid(),name:"範例｜東京 4 天 3 夜",country:"日本",iso:"JP",currency:"JPY",cities:["東京"],start:st,end:addDays(st,3),members,ownerUid:S.uid||null,cardFee:1.5,customCats:[],budget:25000,cacheTotal:0,
     kitty:{enabled:false,keeper:ids.me},unitMode:true,units:[{id:"u_"+uid(),name:"",members:[ids.me,ids.amy]},{id:"u_"+uid(),name:"",members:[ids.nan,ids.zeng]}],createdAt:Date.now()};
   const G=[[ids.me,ids.amy],[ids.nan,ids.zeng]], all=[ids.me,ids.amy,ids.nan,ids.zeng];
@@ -1518,7 +1546,10 @@ function splitTab(t,C){
     ${s.length?s.map(([a,b,x])=>`<div style="padding:14px 0;border-bottom:1px solid var(--line2)">
       <div class="row" style="gap:8px;flex-wrap:wrap">${av(t,a)}<span>${esc(nameOf(t,a))}</span><span class="arrow">→</span>${av(t,b)}<span>${esc(nameOf(t,b))}</span></div>
       <div class="row" style="margin-top:10px"><div class="grow"><b class="num" style="font-size:19px;font-weight:600">${mT(t,x)}</b>${useLocal(t)?`<span class="tiny num">　${ntdT(x)}</span>`:""}</div>
-      ${RO()?"":`<button class="btn xs line" data-pay="${esc(a)}|${esc(b)}|${x}">已付款</button>`}</div></div>`).join(""):`<div class="muted" style="padding:10px 0">款項已結清，無需轉帳</div>`}
+      ${RO()||t.settled||partyMembers(t,a).includes(me)?"":`<button class="btn xs line" data-remind="${esc(a)}|${esc(b)}|${x}" style="margin-right:6px">${ic("bell")}提醒</button>`}
+      ${RO()?"":`<button class="btn xs line" data-pay="${esc(a)}|${esc(b)}|${x}">已付款</button>`}</div>
+      ${(()=>{ const p=partyPay(t,b); return p?`<div class="payinfo"><div class="grow"><div class="tiny">${esc(p.name)} 的收款方式</div><div class="pi">${esc(p.info)}</div></div><button class="btn xs line" data-copy="${esc(p.info)}">複製</button></div>`
+        :(partyMembers(t,b).includes(me)&&!RO()?`<button class="lnk" data-paysetup style="margin-top:8px;font-size:13px">＋ 填寫我的收款方式，方便大家轉帳給你</button>`:""); })()}</div>`).join(""):`<div class="muted" style="padding:10px 0">款項已結清，無需轉帳</div>`}
   </div>
   ${C.transfers.length?`<div class="eyebrow">轉帳紀錄</div><div class="sec tight">
     ${C.transfers.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(e=>`<div class="prow">${av(t,e.fromP||e.from)}<span>${esc(nameOf(t,e.fromP||e.from))}</span><span class="arrow">→</span><span class="grow">${esc(nameOf(t,e.toP||e.to))}</span>
@@ -1742,6 +1773,25 @@ function bindTripRest(t){
     const e={id:uid(),kind:"transfer",from:repOf(t,fromP),to:repOf(t,toP),fromP,toP,twd:+x,date:today(),confirmed:false,createdBy:S.uid||null,createdAt:Date.now()};
     try{await Store.save(t.id,e); notify(t,"settle",`${nameOf(t,fromP)} 已付給 ${nameOf(t,toP)} ${mT(t,+x)}，請收款人確認`); toast("已記錄，等待收款人確認")}catch(_){}
   }));
+  $$("[data-copy]").forEach(b=>b.onclick=async()=>{ try{ await navigator.clipboard.writeText(b.dataset.copy); toast("已複製收款資訊"); }catch(e){ toast("無法複製，請長按文字手動複製"); } });
+  $$("[data-paysetup]").forEach(b=>b.onclick=()=>profileSheet(true));
+  $$("[data-remind]").forEach(b=>b.onclick=lock(async()=>{
+    const [fromP,toP,x]=b.dataset.remind.split("|"); const key=`tripsplit_rm_${t.id}_${fromP}_${toP}`;
+    const pay=partyPay(t,toP); const amt=mT(t,+x);
+    const text=`${whoAmI(t)} 提醒你：請轉 ${amt} 給 ${nameOf(t,toP)}${pay?`\n收款方式：${pay.info}`:""}`;
+    const uids=partyUids(t,fromP).filter(u=>u!==S.uid);
+    let last=0; try{ last=+localStorage.getItem(key)||0; }catch(e){}
+    if(Date.now()-last<30*60*1000){ toast("30 分鐘內已經提醒過了"); return; }
+    if(uids.length&&S.mode==="cloud"&&PUSH.url){
+      const r=await notify(t,"settle",text.replace("\n","　"),"remind-"+fromP,uids);
+      if(r&&r.sent>0){ try{localStorage.setItem(key,String(Date.now()))}catch(e){} toast(`已傳送提醒給 ${nameOf(t,fromP)}`); return; }
+    }
+    const share=`「${t.name}」結算提醒\n${text}\n\n查看明細：${APP_URL}#trip-${t.id}`;
+    if(await confirmBox(`${nameOf(t,fromP)} 還沒開啟旅帳通知，改用 LINE 傳提醒給他？`,"用 LINE 傳送",false)){
+      try{localStorage.setItem(key,String(Date.now()))}catch(e){}
+      location.href="https://line.me/R/share?text="+encodeURIComponent(share);
+    }
+  }));
   $$("[data-confirm]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.confirm]; if(!e)return; try{await Store.save(t.id,{...e,confirmed:true,confirmedBy:S.uid||null,confirmedAt:Date.now()}); notify(t,"settle",`${nameOf(t,e.toP||e.to)} 已確認收到 ${nameOf(t,e.fromP||e.from)} 的 ${mT(t,e.twd)}`); toast("已確認收款")}catch(_){}});
   $$("[data-undo]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.undo]; if(!e)return; try{await Store.del(t.id,e); undoDelete(t.id,e,"已撤銷轉帳紀錄")}catch(_){}});
   if($("#setStart")&&!RO()){ const n=()=>{$("#setLen").textContent=tripLen($("#setStart").value,$("#setEnd").value)}; linkDates($("#setStart"),$("#setEnd"),n); n(); }
@@ -1832,9 +1882,19 @@ function ratesSheet(){
 }
 
 /* 認領身分 */
+function afterJoin(t){
+  try{ if(location.search) history.replaceState(null,"",location.pathname+location.hash); }catch(e){}
+  if(isStandalone()||(!isIOS()&&!deferredPrompt)) return;
+  setTimeout(()=>{ if($("#mask").classList.contains("show")) return;
+    openSheet(`<h3>加入完成 🎉</h3><div class="sec-d">你已經加入「${esc(t.name)}」。建議把旅帳加入主畫面，之後一點就開，還能收到旅伴記帳通知。</div>
+      <button class="btn" id="ajInst">加入主畫面</button><button class="btn line" style="margin-top:10px" onclick="closeSheet()">稍後再說</button>`);
+    $("#ajInst").onclick=()=>{ closeSheet(); setTimeout(installApp,250); };
+  },1800);
+}
 function claimSheet(t){
   const free=(t.members||[]).filter(m=>!m.uid);
-  openSheet(`<h3>加入「${esc(t.name)}」</h3>
+  const iv=inviteInfo();
+  openSheet(`${iv.by?`<div class="tiny" style="margin-bottom:4px">${esc(iv.by)} 邀請你</div>`:""}<h3>加入「${esc(t.name)}」</h3>
     <div class="sec-d">請選擇你是哪一位旅伴，之後你的花費、預算與私人帳都會以此身分計算。</div>
     ${free.length?`<div class="sec tight">${free.map(m=>`<div class="prow" data-claim="${esc(m.id)}" style="cursor:pointer">${av(t,m.id)}<span class="grow">${esc(m.name)}</span><span class="lnk">這是我</span></div>`).join("")}</div>`:""}
     <label class="l">${free.length?"名單中沒有我，以新旅伴加入":"以新旅伴加入"}</label>
@@ -1842,19 +1902,20 @@ function claimSheet(t){
     <button class="btn line" style="margin-top:16px" onclick="closeSheet()">稍後再說</button>`);
   $$("[data-claim]").forEach(el=>el.onclick=lock(async()=>{
     const cur=S.trips[t.id]||t;
-    const ms=cur.members.map(m=>m.id===el.dataset.claim?{...m,uid:S.uid}:m);
-    try{await Store.saveTrip({...cur,members:ms}); closeSheet(); toast("已加入旅程"); setTimeout(()=>{ Store.watch(t.id); notify(S.trips[t.id]||cur,"member",`${(ms.find(m=>m.uid===S.uid)||{}).name||S.myName} 加入了旅程`); },1500);}catch(e){}
+    const ms=cur.members.map(m=>m.id===el.dataset.claim?{...m,uid:S.uid,...(S.myPay?{payInfo:S.myPay}:{})}:m);
+    try{await Store.saveTrip({...cur,members:ms}); closeSheet(); toast("已加入旅程"); afterJoin(t); setTimeout(()=>{ Store.watch(t.id); notify(S.trips[t.id]||cur,"member",`${(ms.find(m=>m.uid===S.uid)||{}).name||S.myName} 加入了旅程`); },1500);}catch(e){}
   }));
   $("#claimNew").onclick=lock(async()=>{
     const n=$("#claimName").value.trim(); if(!n){toast("請輸入名字");return}
     const cur=S.trips[t.id]||t;
-    try{await Store.saveTrip({...cur,members:[...cur.members,{id:uid(),name:n.slice(0,20),uid:S.uid}]}); closeSheet(); toast("已加入旅程"); setTimeout(()=>{ Store.watch(t.id); notify(S.trips[t.id]||cur,"member",`${n.slice(0,20)} 加入了旅程`); },1500);}catch(e){}
+    try{await Store.saveTrip({...cur,members:[...cur.members,{id:uid(),name:n.slice(0,20),uid:S.uid,...(S.myPay?{payInfo:S.myPay}:{})}]}); closeSheet(); toast("已加入旅程"); afterJoin(t); setTimeout(()=>{ Store.watch(t.id); notify(S.trips[t.id]||cur,"member",`${n.slice(0,20)} 加入了旅程`); },1500);}catch(e){}
   });
 }
 
 /* 邀請旅伴 */
 function inviteSheet(t){
-  const link=APP_URL+"?openExternalBrowser=1#trip-"+t.id;
+  const q=new URLSearchParams({openExternalBrowser:"1",n:t.name||"",by:whoAmI(t)||"",c:t.iso||"",d:t.start?`${t.start.slice(5).replace("-","/")}${t.end?"–"+t.end.slice(5).replace("-","/"):""}`:""});
+  const link=APP_URL+"?"+q.toString()+"#trip-"+t.id;
   const msg=`邀請你加入「${t.name}」共同帳本。\n\n我用「旅帳」記錄這趟旅程的花費，會自動換算台幣、計算分帳，大家可以一起記帳。\n\n點此加入（用 Google 登入後選你的名字）：${link}\n\n第一次使用可以把它「加入主畫面」，用起來就像 APP。`;
   openSheet(`<h3>邀請旅伴</h3>
     <div class="sec-d">把專屬連結傳給朋友，朋友用 Google 登入後選自己的名字就加入了，只會看到這一趟的帳。</div>
@@ -1921,7 +1982,7 @@ function catSheet(t,after){
 
 /* 新增旅程 */
 function tripSheet(){
-  let sel=null, cities=[], nameTouched=false; const members=[{id:uid(),name:S.myName||"我",uid:S.uid||undefined}];
+  let sel=null, cities=[], nameTouched=false; const members=[{id:uid(),name:S.myName||"我",uid:S.uid||undefined,payInfo:S.myPay||undefined}];
   openSheet(`<h3>新增旅程</h3>
     <label class="l" style="margin-top:0">目的地（可輸入國家、城市或幣別）</label>
     <input class="inp" id="cq" placeholder="例如：日本、首爾、歐元、EUR" autocomplete="off">
