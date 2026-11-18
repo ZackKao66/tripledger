@@ -1,5 +1,5 @@
 // 旅帳 Service Worker：讓 APP 可以離線開啟
-const VERSION = "tripledger-v2";
+const VERSION = "tripledger-v3";
 const APP_SHELL = ["./", "index.html", "firebase-config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 
@@ -29,4 +29,21 @@ self.addEventListener("fetch", e => {
       return hit || net;
     }));
   }
+});
+
+// 推播通知
+self.addEventListener("push", e => {
+  let d = {};
+  try { d = e.data.json(); } catch (_) { d = { title: "旅帳", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "旅帳", {
+    body: d.body || "", icon: "icons/icon-192.png", badge: "icons/icon-192.png", tag: d.tag, data: { url: d.url || "./" }
+  }));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "./";
+  e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+    for (const c of list) { if ("focus" in c) { c.postMessage({ open: url }); return c.focus(); } }
+    return clients.openWindow(url);
+  }));
 });
