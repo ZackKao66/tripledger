@@ -1770,7 +1770,7 @@ function claimSheet(t){
 
 /* 邀請旅伴 */
 function inviteSheet(t){
-  const link=APP_URL+"#trip-"+t.id;
+  const link=APP_URL+"?openExternalBrowser=1#trip-"+t.id;
   const msg=`邀請你加入「${t.name}」共同帳本。\n\n我用「旅帳」記錄這趟旅程的花費，會自動換算台幣、計算分帳，大家可以一起記帳。\n\n點此加入（用 Google 登入後選你的名字）：${link}\n\n第一次使用可以把它「加入主畫面」，用起來就像 APP。`;
   openSheet(`<h3>邀請旅伴</h3>
     <div class="sec-d">把專屬連結傳給朋友，朋友用 Google 登入後選自己的名字就加入了，只會看到這一趟的帳。</div>
