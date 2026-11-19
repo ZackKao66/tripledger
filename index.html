@@ -655,7 +655,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-zh";
+const APP_VER = "2026.11.19-zi";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2658,8 +2658,12 @@ async function geoSearch(q,iso,limit=6,useAI=true){
   let res=await nom(cc); if(res===null) throw new Error("net");
   if(!res.length&&!cc) res=[];
   /* 相關性：中文/日文查詢時，結果名稱或地址至少要有查詢裡的字，避免模糊比對出不相干的地點 */
-  const cjk=q.match(/[\u3040-\u30ff\u3400-\u9fff]/g)||[];
-  const rel=x=>{ if(!cjk.length) return true; const txt=(x.name||"")+(x.addr||""); return cjk.filter(c=>txt.includes(c)).length>=Math.min(2,cjk.length); };
+  const tr=S.trips[S.tripId]||{};
+  const PLACEW=[tr.country,...(tr.cities||[]),"日本","沖繩","沖縄","那霸","那覇","東京","大阪","京都","北海道","札幌","福岡","名古屋","首爾","釜山","曼谷","香港","澳門","台北","新加坡","飯店","酒店","旅館","ホテル","市","縣","県","站","駅"].filter(Boolean).map(w=>String(w).replace(/（.*?）|\(.*?\)/g,""));
+  let core=q; PLACEW.forEach(w=>{ core=core.split(w).join(" "); });
+  const cjk=core.match(/[\u3040-\u30ff\u3400-\u9fff]/g)||[];
+  /* 只比對「名稱」，不看地址：地址裡常有國家、縣市名稱，會讓不相干的地點混進來 */
+  const rel=x=>{ if(!cjk.length) return true; const nm=x.name||""; return cjk.filter(c=>nm.includes(c)).length>=Math.min(2,cjk.length); };
   res=res.filter(rel);
   if(!res.length){ try{ const r=await fetch(`https://photon.komoot.io/api/?limit=${limit}&q=${encodeURIComponent(q)}`); const js=await r.json();
       res=(js.features||[]).filter(f=>!iso||f.properties?.countrycode===iso).map(f=>{ const p=f.properties||{}; return {name:p.name||q,addr:[p.street,p.city||p.county,p.state,p.country].filter(Boolean).slice(0,3).join(", "),lat:+f.geometry.coordinates[1],lng:+f.geometry.coordinates[0],osm:{category:p.osm_key,type:p.osm_value}}; }).filter(rel); }catch(e){} }
