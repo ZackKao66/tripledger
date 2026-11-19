@@ -655,7 +655,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-ze";
+const APP_VER = "2026.11.19-zf";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2633,11 +2633,12 @@ async function geoFromText(q,iso){
   return name?{lat:null,lng:null,name}:null;
 }
 /* Google 地點搜尋（經由自己的伺服器；用量有每日上限，超過自動改回免費搜尋） */
+const GP_ON=false; /* Google 地點搜尋：預設關閉，只用免費資料庫＋AI 辨識 */
 let GP_SES=uid();
 const gpNewSession=()=>{ GP_SES=uid(); };
 const GT2OSM=ts=>{ const t=(ts||[]).join(","); return /lodging|hotel/.test(t)?{category:"tourism",type:"hotel"}:/airport/.test(t)?{category:"aeroway",type:"aerodrome"}:/train_station|subway_station|transit_station|bus_station/.test(t)?{category:"railway",type:"station"}:/cafe|bakery/.test(t)?{category:"amenity",type:"cafe"}:/restaurant|food|meal|bar/.test(t)?{category:"amenity",type:"restaurant"}:/shopping_mall|store|market/.test(t)?{category:"shop",type:"mall"}:/park|natural_feature/.test(t)?{category:"leisure",type:"park"}:/tourist_attraction|museum|place_of_worship|amusement|aquarium|zoo/.test(t)?{category:"tourism",type:"attraction"}:{category:"",type:""}; };
 async function gpSearch(q,iso){
-  if(S.gpOff||!isCloud()||!PUSH.url||!FB?.auth?.currentUser) return null;
+  if(!GP_ON||S.gpOff||!isCloud()||!PUSH.url||!FB?.auth?.currentUser) return null;
   try{ const t=S.trips[S.tripId]||{}; const st=staysOf(t)[0];
     const r=await pushPost("/gp-search",{q,iso,session:GP_SES,...(st?.geo?{lat:st.geo.lat,lng:st.geo.lng}:{})});
     return (r.items||[]).map(x=>({name:x.name,addr:x.addr,gpid:x.id,lat:null,lng:null,osm:GT2OSM(x.types),g:true}));
