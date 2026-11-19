@@ -633,7 +633,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-v";
+const APP_VER = "2026.11.19-w";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2523,8 +2523,21 @@ async function geoFromLink(u,iso){
   if(!isMapUrl(u)) return null;
   const r=await resolveGeo([u]); g=r[u]||null; if(!g) return null;
   if(g.lat!=null&&isFinite(g.lat)) return g;
-  for(const q of [g.q,g.name].filter(Boolean)){ try{ const hits=await geoSearch(q,iso,1); if(hits&&hits[0]) return {lat:hits[0].lat,lng:hits[0].lng,name:g.name||hits[0].name}; }catch(e){} }
-  return g.name?{lat:null,lng:null,name:g.name}:null;
+  return geoFromText(g.q||g.name||"",iso);
+}
+/* 從「名稱 樓層 地址, 城市, 縣, 郵遞區號 國家」文字定位：先精確、再退到區域 */
+const COUNTRY_RE=/(日本|Japan|台灣|臺灣|Taiwan|대한민국|South Korea|Korea|ประเทศไทย|Thailand|中國|China|香港|Hong Kong)$/i;
+async function geoFromText(q,iso){
+  q=String(q||"").trim(); if(!q) return null;
+  const parts=q.split(/[,，]/).map(x=>x.trim().replace(COUNTRY_RE,"").trim()).filter(Boolean);
+  const name=(parts[0]||"").split(/\s+(?=\d)/)[0].trim();
+  const street=(parts[0]||"").slice(name.length).replace(/\b\d+\s*(階|F|樓|층)\b|\d+(階|樓|층)/g,"").trim();
+  const zip=(q.match(/\b\d{3}-\d{4}\b|\b\d{5}\b/)||[])[0];
+  const area=parts.slice(1).map(x=>x.replace(/\b\d{3}-\d{4}\b|\b\d{5}\b/,"").trim()).filter(Boolean);
+  const tries=[[name,false],[[street,...area].filter(Boolean).join(", "),false],[[name,...area.slice(0,1)].join(" "),false],[[street.replace(/chome|丁目|番地?|号/gi," ").replace(/[\d-]+/g," ").replace(/\s+/g," ").trim(),...area].filter(Boolean).join(", "),true],[area.join(", "),true],[zip?zip+(area.length?", "+area[area.length-1]:""):"",true]];
+  for(const [tq,approx] of tries){ if(!tq||tq.length<2) continue;
+    try{ const hits=await geoSearch(tq,iso,1); if(hits&&hits[0]) return {lat:hits[0].lat,lng:hits[0].lng,name:name||hits[0].name,approx}; }catch(e){} }
+  return name?{lat:null,lng:null,name}:null;
 }
 async function geoSearch(q,iso,limit=6){
   const lang=LANG==="en"?"en":"zh-TW,zh,en";
@@ -2552,15 +2565,15 @@ function staySheet(t,old,back){
     <button class="btn" id="stSave" style="margin-top:18px">${old?"更新":"加入"}</button>
     ${old?`<button class="btn line" id="stDel" style="margin-top:10px;color:var(--red)">刪除這間住宿</button>`:""}
     <button class="btn line" id="stBack" style="margin-top:10px">返回</button>`);
-  const drawGeo=()=>{ $("#stGeo").innerHTML=st.geo?`<span style="color:var(--ok)">${ic("check")}已定位</span>`:"搜尋後選一個結果，飯店才會出現在地圖並計算交通時間"; };
+  const drawGeo=()=>{ $("#stGeo").innerHTML=st.geo?(st.approx?`<span style="color:var(--warm)">${ic("check")}已用地址區域大約定位，想更精確可以再用名稱搜尋選一個結果</span>`:`<span style="color:var(--ok)">${ic("check")}已定位</span>`):"搜尋後選一個結果，飯店才會出現在地圖並計算交通時間"; };
   drawGeo();
   const showRes=()=>{ $("#stRes").innerHTML=st.res.length?`<div class="sec tight" style="margin-top:8px">${st.res.map((x,i)=>`<div class="prow" data-sr="${i}" style="cursor:pointer">${pcIcon("hotel")}<div class="grow" style="min-width:0"><div>${esc(x.name)}</div><div class="tiny">${esc(x.addr||"")}</div></div></div>`).join("")}</div>`:`<div class="tiny" style="margin-top:8px">找不到「${esc($("#stQ").value.trim())}」。可以換成英文或當地名稱，或在 Google 地圖按「分享 › 複製連結」貼上</div>`;
-    $$("[data-sr]").forEach(r=>r.onclick=()=>{ const x=st.res[+r.dataset.sr]; st.geo={lat:x.lat,lng:x.lng,name:x.name}; $("#stQ").value=x.name; $("#stRes").innerHTML=""; drawGeo(); }); };
+    $$("[data-sr]").forEach(r=>r.onclick=()=>{ const x=st.res[+r.dataset.sr]; st.approx=false; st.geo={lat:x.lat,lng:x.lng,name:x.name}; $("#stQ").value=x.name; $("#stRes").innerHTML=""; drawGeo(); }); };
   const search=async()=>{ let v=$("#stQ").value.trim(); if(!v) return; $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">搜尋中…</div>`;
     const u=urlIn(v);
     if(u){ let label=v.replace(u,"").split("\n").map(x=>x.trim()).filter(Boolean)[0]||""; if(!label){ const pm=u.match(/\/place\/([^/@?]+)/); if(pm){ try{ label=decodeURIComponent(pm[1].replace(/\+/g," ")); }catch(e){} } }
       const g=await geoFromLink(u,t.iso);
-      if(g&&g.lat!=null){ st.geo={lat:g.lat,lng:g.lng,name:g.name||label||""}; st.place=u; const nm=(g.name||label||"").slice(0,60);
+      if(g&&g.lat!=null){ st.geo={lat:g.lat,lng:g.lng,name:g.name||label||""}; st.approx=!!g.approx; st.place=u; const nm=(g.name||label||"").slice(0,60);
         $("#stQ").value=nm; $("#stRes").innerHTML=nm?"":`<div class="tiny" style="margin-top:8px;color:var(--warm)">已定位，請在上面輸入飯店名稱</div>`; drawGeo(); if(!nm) $("#stQ").focus(); return; }
       const nm=(g?.name||label||"").slice(0,60);
       if(nm){ st.place=u; $("#stQ").value=nm; try{ st.res=await geoSearch(nm,t.iso,6); showRes(); }catch(e){} if(!st.res?.length) $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">已帶入名稱「${esc(nm)}」，但找不到位置。可以直接按「加入」，之後再補定位</div>`; return; }
