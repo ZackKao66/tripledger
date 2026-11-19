@@ -655,7 +655,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-za";
+const APP_VER = "2026.11.19-zb";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2611,7 +2611,10 @@ async function geoFromLink(u,iso){
   let g=parseMapLink(u); if(g) return g;
   if(!isMapUrl(u)) return null;
   const r=await resolveGeo([u]); g=r[u]||null; if(!g) return null;
+  const junk=x=>!x||/^[A-Za-z0-9_\-:.=+\/]{16,}$/.test(String(x).trim())||/^(0x[0-9a-f]+|place_id|ChIJ)/i.test(String(x).trim());
+  if(junk(g.name)) g.name=null; if(junk(g.q)) g.q=null;
   if(g.lat!=null&&isFinite(g.lat)) return g;
+  if(!g.q&&!g.name) return null;
   return geoFromText(g.q||g.name||"",iso);
 }
 /* 從「名稱 樓層 地址, 城市, 縣, 郵遞區號 國家」文字定位：先精確、再退到區域 */
@@ -2673,6 +2676,7 @@ function staySheet(t,old,back){
       if(g&&g.lat!=null){ st.geo={lat:g.lat,lng:g.lng,name:g.name||label||""}; st.approx=!!g.approx; st.place=u; const nm=(g.name||label||"").slice(0,60);
         $("#stQ").value=nm; $("#stRes").innerHTML=nm?"":`<div class="tiny" style="margin-top:8px;color:var(--warm)">已定位，請在上面輸入飯店名稱</div>`; drawGeo(); if(!nm) $("#stQ").focus(); return; }
       const nm=(g?.name||label||"").slice(0,60);
+      if(!nm){ $("#stQ").value=""; $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px;color:var(--warm)">這個連結讀不到飯店名稱。請直接輸入飯店名稱（英文或當地名稱最準），或在 Google 地圖打開飯店頁面後按「分享 › 複製連結」再貼一次</div>`; $("#stQ").focus(); return; }
       if(nm){ st.place=u; $("#stQ").value=nm; try{ st.res=await geoSearch(nm,t.iso,6); showRes(); }catch(e){} if(!st.res?.length) $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">已帶入名稱「${esc(nm)}」，但找不到位置。可以直接按「加入」，之後再補定位</div>`; return; }
       $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">${S.mode==="cloud"?"無法讀取這個連結，請改用名稱搜尋":"登入後才能讀取 Google 地圖短網址，請改用名稱搜尋"}</div>`;
       return; }
