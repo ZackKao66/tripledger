@@ -655,7 +655,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-zf";
+const APP_VER = "2026.11.19-zg";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2656,10 +2656,14 @@ async function geoSearch(q,iso,limit=6,useAI=true){
     return js.map(x=>({name:x.name||String(x.display_name).split(",")[0],addr:String(x.display_name).split(",").slice(1,4).join(",").trim(),lat:+x.lat,lng:+x.lon,osm:{category:x.category,type:x.type}})); }catch(e){ return null; } };
   const cc=iso&&/^[A-Z]{2}$/.test(iso)?`&countrycodes=${iso.toLowerCase()}`:"";
   let res=await nom(cc); if(res===null) throw new Error("net");
-  if(!res.length&&cc) res=await nom("")||[];
+  if(!res.length&&!cc) res=[];
+  /* 相關性：中文/日文查詢時，結果名稱或地址至少要有查詢裡的字，避免模糊比對出不相干的地點 */
+  const cjk=q.match(/[\u3040-\u30ff\u3400-\u9fff]/g)||[];
+  const rel=x=>{ if(!cjk.length) return true; const txt=(x.name||"")+(x.addr||""); return cjk.filter(c=>txt.includes(c)).length>=Math.min(2,cjk.length); };
+  res=res.filter(rel);
   if(!res.length){ try{ const r=await fetch(`https://photon.komoot.io/api/?limit=${limit}&q=${encodeURIComponent(q)}`); const js=await r.json();
-      res=(js.features||[]).filter(f=>!iso||!f.properties?.countrycode||f.properties.countrycode===iso).map(f=>{ const p=f.properties||{}; return {name:p.name||q,addr:[p.street,p.city||p.county,p.state,p.country].filter(Boolean).slice(0,3).join(", "),lat:+f.geometry.coordinates[1],lng:+f.geometry.coordinates[0],osm:{category:p.osm_key,type:p.osm_value}}; }); }catch(e){} }
-  if(!res.length&&useAI&&aiOK()){ try{ res=await placeAI(q,iso); }catch(e){} }
+      res=(js.features||[]).filter(f=>!iso||f.properties?.countrycode===iso).map(f=>{ const p=f.properties||{}; return {name:p.name||q,addr:[p.street,p.city||p.county,p.state,p.country].filter(Boolean).slice(0,3).join(", "),lat:+f.geometry.coordinates[1],lng:+f.geometry.coordinates[0],osm:{category:p.osm_key,type:p.osm_value}}; }).filter(rel); }catch(e){} }
+  S.aiErr=""; if(!res.length&&useAI&&aiOK()){ try{ res=await placeAI(q,iso); }catch(e){ S.aiErr=String(e.message||e); } }
   return res;
 }
 /* 智慧辨識：中文俗稱、縮寫交給 AI 找出正式名稱，再用地圖資料庫校正座標 */
@@ -2701,7 +2705,7 @@ function staySheet(t,old,back){
   const showN=()=>{ const a=$("#stIn").value, b=$("#stOut").value, n=Math.round((new Date(b+"T00:00")-new Date(a+"T00:00"))/864e5); st.nights=n; const dn=d=>ds.includes(d)?`第 ${ds.indexOf(d)+1} 天`:"回國後"; $("#stNights").textContent=`共 ${n} 晚・${dn(a)}入住，${dn(b)}退房`; };
   drawOut(addDays(st.checkin,Math.max(1,+st.nights||1)));
   $("#stIn").onchange=()=>drawOut($("#stOut").value); $("#stOut").onchange=showN;
-  const showRes=()=>{ $("#stRes").innerHTML=st.res.length?`<div class="sec tight" style="margin-top:8px">${st.res.map((x,i)=>`<div class="prow" data-sr="${i}" style="cursor:pointer">${pcIcon("hotel")}<div class="grow" style="min-width:0"><div>${esc(x.name)}${x.ai?` <span class="pill" style="font-size:10.5px">${ic("spark")}AI 辨識</span>`:""}</div><div class="tiny">${esc(x.addr||"")}${x.ai&&x.approx?"・位置為約略":""}</div></div></div>`).join("")}</div>`:`<div class="tiny" style="margin-top:8px">找不到「${esc($("#stQ").value.trim())}」。可以換成英文或當地名稱，或在 Google 地圖按「分享 › 複製連結」貼上</div>`;
+  const showRes=()=>{ $("#stRes").innerHTML=st.res.length?`<div class="sec tight" style="margin-top:8px">${st.res.map((x,i)=>`<div class="prow" data-sr="${i}" style="cursor:pointer">${pcIcon("hotel")}<div class="grow" style="min-width:0"><div>${esc(x.name)}${x.ai?` <span class="pill" style="font-size:10.5px">${ic("spark")}AI 辨識</span>`:""}</div><div class="tiny">${esc(x.addr||"")}${x.ai&&x.approx?"・位置為約略":""}</div></div></div>`).join("")}</div>`:`${S.aiErr?`<div class="tiny" style="margin-top:8px;color:var(--warm)">AI 辨識沒有回應（${esc(S.aiErr)}），請確認伺服器已更新到最新版</div>`:""}<div class="tiny" style="margin-top:8px">找不到「${esc($("#stQ").value.trim())}」。可以換成英文或當地名稱，或在 Google 地圖按「分享 › 複製連結」貼上</div>`;
     $$("[data-sr]").forEach(r=>r.onclick=async()=>{ const x=st.res[+r.dataset.sr]; if(x.gpid&&x.lat==null){ r.style.opacity=.5; await gpResolve(x); r.style.opacity=""; if(x.lat==null){ toast("暫時無法取得位置，請再試一次"); return; } } st.approx=!!x.approx; st.geo={lat:x.lat,lng:x.lng,name:x.name}; $("#stQ").value=x.name; $("#stRes").innerHTML=""; drawGeo(); }); };
   const search=async()=>{ let v=$("#stQ").value.trim(); if(!v) return; $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">搜尋中…（找不到時會用 AI 辨識，約需 5 秒）</div>`;
     const u=urlIn(v);
