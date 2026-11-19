@@ -91,7 +91,7 @@ body[data-dest] .hero:before{content:"";position:absolute;left:0;right:0;top:0;h
 .themepick button .sw{height:38px}
 .themepick button span{display:block;padding:7px 9px}
 .themepick button.on{border:2px solid var(--ink)}
-.hero .v{font-size:34px;font-weight:600;margin:6px 0 14px}
+.hero .v{font-size:34px;font-weight:600;margin:6px 0 14px;padding-right:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hero .v small{font-size:15px;opacity:.9;margin-right:6px;font-weight:500}
 .hero .grid{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid rgba(243,239,230,.18);padding-top:12px}
 .hero .grid span{font-size:12px;opacity:.9}
@@ -329,7 +329,7 @@ textarea.inp{min-height:150px;font-size:14px;line-height:1.6}
 .qrimg{position:relative;width:200px;height:200px;background:#fff;border-radius:12px;padding:6px}.qrimg svg{width:100%;height:100%;display:block}
 .qrlogo{position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);background:#fff;border-radius:10px;padding:3px}.qrlogo img{width:100%;height:100%;border-radius:8px;display:block}
 .hmini{display:flex;align-items:center;gap:8px;width:calc(100% - 32px);margin:4px 16px 4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 12px 11px 14px;font:inherit;font-size:13.5px;color:var(--ink2);cursor:pointer;text-align:left}
-.hmini .i{width:16px;height:16px;flex:none;color:var(--sub)}.hmini b{color:var(--ink);font-weight:700}.hmini b.neg{color:#A32D2D}.hmini .grow{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hms{color:var(--sub)}
+.hmini .i{width:16px;height:16px;flex:none;color:var(--sub)}.hmini b{color:var(--ink);font-weight:700}.hmini b.neg{color:#A32D2D}.hmini .grow{min-width:0;line-height:1.45}.hmini .grow>b{white-space:nowrap}.hms{color:var(--sub);display:inline-block;white-space:nowrap}
 .payq{display:flex;align-items:center;gap:10px;margin-top:14px}.pql{font-size:13px;color:var(--sub);flex:none}
 .pqs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px}.pqs::-webkit-scrollbar{display:none}
 .pqs button{display:flex;align-items:center;gap:6px;flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 12px 3px 3px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer}
@@ -358,8 +358,8 @@ details.sall>summary::-webkit-details-marker{display:none}details.sall>summary .
 .paddend .i{width:16px;height:16px;flex:none}.paddend span{display:flex;flex-direction:column;font-size:13.5px;color:var(--ink2);font-weight:600}.paddend small{font-size:12px;color:var(--sub);font-weight:400}
 .setg{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--sub);letter-spacing:1px;margin:20px 4px 8px}.setg svg{width:15px;height:15px}
 .balbars{padding:4px 0 14px;margin-bottom:6px;border-bottom:1px solid var(--line2)}
-.bb{display:grid;grid-template-columns:minmax(0,74px) 1fr auto;align-items:center;gap:10px;padding:5px 0;font-size:13px}
-.bbn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}.bbn small{font-weight:400;color:var(--sub)}
+.bb{display:grid;grid-template-columns:minmax(0,84px) 1fr auto;align-items:center;gap:10px;padding:5px 0;font-size:13px}
+.bbn{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-weight:600;line-height:1.3;word-break:break-all}.bbn small{font-weight:400;color:var(--sub)}
 .bbt{display:grid;grid-template-columns:1fr 1fr;height:12px;position:relative}.bbt:after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1.5px;background:var(--line)}
 .bbh{display:flex;height:12px}.bbh.l{justify-content:flex-end}.bbh i{display:block;height:100%;transition:width .5s cubic-bezier(.2,.9,.25,1)}
 .bbh.l i{background:#E24B4A;border-radius:6px 0 0 6px}.bbh.r i{background:#1D9E75;border-radius:0 6px 6px 0}
@@ -553,7 +553,8 @@ details.set .body{padding:0 18px 18px;border-top:1px solid var(--line2);padding-
 .bnav button[data-tab]{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11.5px;color:color-mix(in srgb,var(--sub) 65%,var(--ink));min-height:54px}
 .bnav button[data-tab] svg.i{width:22px;height:22px}
 .bnav button.on{color:var(--tabline,var(--ink));font-weight:700}
-.bplus{position:absolute;right:16px;bottom:calc(100% + 14px);width:58px;height:58px;border-radius:50%;background:var(--fab,var(--ink));color:var(--on-fab,var(--on-ink));display:grid;place-items:center;margin:0;box-shadow:0 8px 22px rgba(0,0,0,.25);flex:none}
+.bplus{position:absolute;right:16px;bottom:calc(100% + 14px);width:58px;height:58px;border-radius:50%;background:var(--fab,var(--ink));color:var(--on-fab,var(--on-ink));display:grid;place-items:center;margin:0;box-shadow:0 8px 22px rgba(0,0,0,.25);flex:none;transition:transform .25s cubic-bezier(.2,.9,.25,1),opacity .2s}
+.bplus.away{transform:translateY(calc(100% + 90px));opacity:0;pointer-events:none}.fabtip.away{opacity:0;pointer-events:none}
 .bplus svg.i{width:26px;height:26px;stroke-width:2.1}
 .hchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .hchip{background:rgba(255,255,255,.13);border-radius:99px;padding:6px 10px;font-size:12.5px;white-space:nowrap;color:var(--hero-fg)}
@@ -675,7 +676,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-wc";
+const APP_VER = "2026.11.19-we";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1372,6 +1373,7 @@ function onHash(){
 function setHash(h){ try{ if(location.hash!=="#"+h) location.hash=h; }catch(e){} }
 
 /* ===================== 畫面 ===================== */
+function fitHero(){ const v=document.querySelector("#hero .v"); if(!v) return; let f=34; v.style.fontSize=""; while(v.scrollWidth>v.clientWidth+1&&f>20){ f-=2; v.style.fontSize=f+"px"; } }
 function onScroll(){ const h=$("#hero"), b=$("#stickybar"); if(!h||!b) return; b.classList.toggle("on", h.getBoundingClientRect().bottom<0); }
 window.addEventListener("scroll",onScroll,{passive:true});
 window.addEventListener("online",()=>{ toast("已恢復連線"); render(); });
@@ -1382,7 +1384,7 @@ function render(){
   const dk=S.tripId?destOf(S.trips[S.tripId]):null; if(dk) document.body.dataset.dest=dk; else delete document.body.dataset.dest;
   if(!S.tripId){ app.innerHTML=homeView(); bindHome(); return; }
   const t=S.trips[S.tripId]; if(!t){S.tripId=null; return render();}
-  app.innerHTML=tripView(t); bindTrip(t); window.scrollTo(0,y); onScroll();
+  app.innerHTML=tripView(t); bindTrip(t); fitHero(); window.scrollTo(0,y); onScroll();
   if(needsClaim(t) && !S.claimAsked[t.id] && !$("#mask").classList.contains("show")){ S.claimAsked[t.id]=true; claimSheet(t); }
 }
 function statusTag(){
@@ -1603,7 +1605,7 @@ function tripView(t){
   <div class="wrap">${S.note?`<div class="note">${esc(S.note)}</div>`:""}${
     S.tab==="list"?listTab(t,C):S.tab==="split"?splitTab(t,C):S.tab==="wallet"?walletTab(t,C):S.tab==="stat"?statTab(t,C):S.tab==="plan"?planTab(t):setTab(t)}<div style="height:${S.tab==="plan"?0:76}px" aria-hidden="true"></div></div>
   <nav class="bnav">${[["list","receipt","明細"],["plan","route","行程"],["split","swap","分帳"],["wallet","cash","錢包"],["stat","chart","統計"]].map(([k,i,n])=>`<button data-tab="${k}" class="${S.tab===k?"on":""}">${ic(i)}${n}</button>`).join("")}
-    ${RO()?"":(S.tab==="plan"?`<button class="bplus plan ext ${window.scrollY>60?"mini":""}" id="addExp" aria-label="新增行程或 AI 排行程">${ic("plus")}<span class="fl">新增行程</span><i class="fsp">${ic("spark")}</i></button>${aiOK()&&!lsGet("tripsplit_fabtip")&&Object.keys(S.plan||{}).length?`<div class="fabtip" id="fabTip">點這裡可以<b>手動新增地點</b>，或讓 <b>✨ AI 幫你排行程</b><button id="fabTipX" aria-label="知道了">知道了</button></div>`:""}`:`<button class="bplus" id="addExp" aria-label="記一筆">${ic("plus")}</button>`)}</nav>`;
+    ${RO()||S.tab==="set"?"":(S.tab==="plan"?`<button class="bplus plan ext ${window.scrollY>60?"mini":""}" id="addExp" aria-label="新增行程或 AI 排行程">${ic("plus")}<span class="fl">新增行程</span><i class="fsp">${ic("spark")}</i></button>${aiOK()&&!lsGet("tripsplit_fabtip")&&Object.keys(S.plan||{}).length?`<div class="fabtip" id="fabTip">點這裡可以<b>手動新增地點</b>，或讓 <b>✨ AI 幫你排行程</b><button id="fabTipX" aria-label="知道了">知道了</button></div>`:""}`:`<button class="bplus" id="addExp" aria-label="記一筆">${ic("plus")}</button>`)}</nav>`;
 }
 
 /* --- 明細 --- */
@@ -2530,6 +2532,13 @@ const AI_STY=["景點","美食","咖啡甜點","購物","自然","親子","文�
 function aiPrefs(){ try{ return {styles:["景點","美食"],pace:"剛好",start:"09:00",end:"21:00",...JSON.parse(localStorage.getItem("tripsplit_ai")||"{}")}; }catch(e){ return {styles:["景點","美食"],pace:"剛好",start:"09:00",end:"21:00"}; } }
 function hideFabTip(){ try{ localStorage.setItem("tripsplit_fabtip","1"); }catch(e){} $("#fabTip")?.remove(); }
 window.addEventListener("scroll",()=>{ const f=document.querySelector(".bplus.ext"); if(f) f.classList.toggle("mini",window.scrollY>60); },{passive:true});
+let _fabY=0, _fabAcc=0;
+window.addEventListener("scroll",()=>{ const y=window.scrollY, dy=y-_fabY; _fabY=y; const b=document.querySelector(".bplus"); if(!b) return;
+  const atEnd=y+innerHeight>=document.documentElement.scrollHeight-40;
+  _fabAcc=(Math.sign(dy)===Math.sign(_fabAcc)?_fabAcc:0)+dy;
+  let away=b.classList.contains("away");
+  if(y<80||atEnd) away=false; else if(_fabAcc>24) away=true; else if(_fabAcc<-24) away=false;
+  b.classList.toggle("away",away); document.querySelector(".fabtip")?.classList.toggle("away",away); },{passive:true});
 function planFab(t){
   const day=curPlanDay(t);
   if(!aiOK()){ planSheet(t,null,day==="wish"?"wish":undefined); return; }
