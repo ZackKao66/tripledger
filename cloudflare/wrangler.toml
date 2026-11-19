@@ -1,0 +1,14 @@
+# 旅帳推播伺服器（Cloudflare Worker）— 由 GitHub Actions 自動部署
+# 私密資料（VAPID_PRIVATE、FIREBASE_SA、GEMINI_KEY、GEMINI_RELAY）存在 Cloudflare 加密設定，不在這裡
+name = "tripledger-push"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+keep_vars = true
+
+[[kv_namespaces]]
+binding = "PUSH"
+id = "f6eee04339984e48b6074298d1ee2341"
+
+[triggers]
+crons = ["0 * * * *"]
