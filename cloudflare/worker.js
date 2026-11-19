@@ -26,6 +26,45 @@ async function whoIs(idToken) {
   const d = await r.json();
   return d.users?.[0]?.localId || null;
 }
+async function whoFull(idToken) {
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken }) });
+  if (!r.ok) return null;
+  return (await r.json()).users?.[0] || null;
+}
+// ---- 轉移碼：免登入角色從 Safari 搬到主畫面 App（或換手機）----
+const XF_ABC = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+async function mintCustomToken(env, uid) {
+  const sa = JSON.parse(env.FIREBASE_SA);
+  const pem = sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  const key = await crypto.subtle.importKey("pkcs8", unb64u(pem.replace(/\+/g, "-").replace(/\//g, "_")), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64u(enc.encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
+  const body = b64u(enc.encode(JSON.stringify({ iss: sa.client_email, sub: sa.client_email, aud: "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit", iat: now, exp: now + 3600, uid })));
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, enc.encode(`${head}.${body}`));
+  return `${head}.${body}.${b64u(sig)}`;
+}
+async function xferNew(b, env, origin) {
+  if (!env.FIREBASE_SA) return json({ error: "伺服器尚未設定" }, 500, origin);
+  const u = await whoFull(b.idToken); if (!u) return json({ error: "請重新登入" }, 401, origin);
+  if ((u.providerUserInfo || []).some(p => p.providerId === "google.com")) return json({ error: "google", detail: "已綁定 Google，直接用 Google 登入就能找回" }, 400, origin);
+  const old = await env.PUSH.get("xu:" + u.localId); if (old) await env.PUSH.delete("xf:" + old);
+  const r = crypto.getRandomValues(new Uint8Array(6)); const code = [...r].map(x => XF_ABC[x % 32]).join("");
+  await env.PUSH.put("xf:" + code, JSON.stringify({ uid: u.localId, ts: Date.now() }), { expirationTtl: 1800 });
+  await env.PUSH.put("xu:" + u.localId, code, { expirationTtl: 1800 });
+  return json({ ok: true, code, ttl: 1800 }, 200, origin);
+}
+async function xferUse(b, env, origin, req) {
+  if (!env.FIREBASE_SA) return json({ error: "伺服器尚未設定" }, 500, origin);
+  const ip = req.headers.get("CF-Connecting-IP") || "x"; const rk = "xr:" + ip;
+  const n = +(await env.PUSH.get(rk) || 0); if (n >= 12) return json({ error: "too many", detail: "嘗試太多次，請 15 分鐘後再試" }, 429, origin);
+  const code = String(b.code || "").toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/O/g, "0").replace(/I/g, "1");
+  const rec = code.length === 6 ? await env.PUSH.get("xf:" + code) : null;
+  if (!rec) { await env.PUSH.put(rk, String(n + 1), { expirationTtl: 900 }); return json({ error: "bad code", detail: "轉移碼不對或已過期（30 分鐘有效）" }, 404, origin); }
+  const { uid } = JSON.parse(rec);
+  await env.PUSH.delete("xf:" + code); await env.PUSH.delete("xu:" + uid);
+  try { return json({ ok: true, token: await mintCustomToken(env, uid) }, 200, origin); }
+  catch (e) { return json({ error: "mint", detail: String(e.message || e).slice(0, 120) }, 500, origin); }
+}
 // 讀取旅程成員（以登入者身分讀，受 Firestore 規則保護）
 async function tripMembers(idToken, tripId) {
   const r = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/trips/${encodeURIComponent(tripId)}`, { headers: { Authorization: `Bearer ${idToken}` } });
@@ -412,6 +451,8 @@ export default {
     if (req.method === "GET") return json({ ok: true, service: "旅帳推播", publicKey: VAPID_PUBLIC }, 200, origin);
     if (origin !== ALLOWED_ORIGIN) return json({ error: "origin" }, 403, origin);
     let b; try { b = await req.json(); } catch { return json({ error: "bad json" }, 400, origin); }
+    if (path === "/xfer-use") return xferUse(b, env, origin, req);
+    if (path === "/xfer-new") return xferNew(b, env, origin);
     const uid = b.idToken ? await whoIs(b.idToken) : null;
     if (!uid) return json({ error: "請重新登入" }, 401, origin);
 
