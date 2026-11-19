@@ -633,7 +633,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-u";
+const APP_VER = "2026.11.19-v";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2518,6 +2518,14 @@ function staysSheet(t){
   };
   draw();
 }
+async function geoFromLink(u,iso){
+  let g=parseMapLink(u); if(g) return g;
+  if(!isMapUrl(u)) return null;
+  const r=await resolveGeo([u]); g=r[u]||null; if(!g) return null;
+  if(g.lat!=null&&isFinite(g.lat)) return g;
+  for(const q of [g.q,g.name].filter(Boolean)){ try{ const hits=await geoSearch(q,iso,1); if(hits&&hits[0]) return {lat:hits[0].lat,lng:hits[0].lng,name:g.name||hits[0].name}; }catch(e){} }
+  return g.name?{lat:null,lng:null,name:g.name}:null;
+}
 async function geoSearch(q,iso,limit=6){
   const lang=LANG==="en"?"en":"zh-TW,zh,en";
   const nom=async cc=>{ try{ const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=${limit}&accept-language=${lang}${cc}&q=${encodeURIComponent(q)}`); const js=await r.json();
@@ -2551,10 +2559,12 @@ function staySheet(t,old,back){
   const search=async()=>{ let v=$("#stQ").value.trim(); if(!v) return; $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">搜尋中…</div>`;
     const u=urlIn(v);
     if(u){ let label=v.replace(u,"").split("\n").map(x=>x.trim()).filter(Boolean)[0]||""; if(!label){ const pm=u.match(/\/place\/([^/@?]+)/); if(pm){ try{ label=decodeURIComponent(pm[1].replace(/\+/g," ")); }catch(e){} } }
-      let g=parseMapLink(u); if(!g&&isMapUrl(u)){ const r=await resolveGeo([u]); g=r[u]||null; }
-      if(g){ st.geo={lat:g.lat,lng:g.lng,name:g.name||label||""}; st.place=u; const nm=(g.name||label||"").slice(0,60);
-        $("#stQ").value=nm; $("#stRes").innerHTML=nm?"":`<div class="tiny" style="margin-top:8px;color:var(--warm)">已定位，請在上面輸入飯店名稱</div>`; drawGeo(); if(!nm) $("#stQ").focus(); }
-      else $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">${S.mode==="cloud"?"無法讀取這個連結，請改用名稱搜尋":"登入後才能讀取 Google 地圖短網址，請改用名稱搜尋"}</div>`;
+      const g=await geoFromLink(u,t.iso);
+      if(g&&g.lat!=null){ st.geo={lat:g.lat,lng:g.lng,name:g.name||label||""}; st.place=u; const nm=(g.name||label||"").slice(0,60);
+        $("#stQ").value=nm; $("#stRes").innerHTML=nm?"":`<div class="tiny" style="margin-top:8px;color:var(--warm)">已定位，請在上面輸入飯店名稱</div>`; drawGeo(); if(!nm) $("#stQ").focus(); return; }
+      const nm=(g?.name||label||"").slice(0,60);
+      if(nm){ st.place=u; $("#stQ").value=nm; try{ st.res=await geoSearch(nm,t.iso,6); showRes(); }catch(e){} if(!st.res?.length) $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">已帶入名稱「${esc(nm)}」，但找不到位置。可以直接按「加入」，之後再補定位</div>`; return; }
+      $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">${S.mode==="cloud"?"無法讀取這個連結，請改用名稱搜尋":"登入後才能讀取 Google 地圖短網址，請改用名稱搜尋"}</div>`;
       return; }
     try{ st.res=await geoSearch(v,t.iso,6); showRes(); }catch(e){ $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">搜尋需要網路，請稍後再試</div>`; } };
   $("#stQ").addEventListener("paste",()=>setTimeout(()=>{ if(urlIn($("#stQ").value)) search(); },50));
@@ -2791,8 +2801,9 @@ function planSheet(t,old,preDay){
   let qT=null, qSeq=0;
   const search=async v=>{
     const seq=++qSeq; const u=urlIn(v);
-    if(u){ let g=parseMapLink(u); if(!g&&isMapUrl(u)){ const r=await resolveGeo([u]); g=r[u]||null; }
+    if(u){ let g=await geoFromLink(u,t.iso);
       if(seq!==qSeq) return;
+      if(g&&g.lat==null){ if(g.name){ $("#plName").value=$("#plName").value.trim()||g.name; st.place=u; toast("找不到座標，已帶入名稱，可再用搜尋定位"); } else toast("無法解析這個連結，請改用搜尋"); return; }
       if(g){ st.place=u; pick({lat:g.lat,lng:g.lng,name:g.name||$("#plName").value.trim()||"Google 地圖位置"},null); }
       else toast(S.mode==="cloud"?"無法解析這個連結，請改用搜尋":"登入後才能解析 Google 地圖短網址，請改用搜尋");
       return; }
