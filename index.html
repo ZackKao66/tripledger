@@ -597,7 +597,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-l";
+const APP_VER = "2026.11.19-m";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -3058,7 +3058,7 @@ function inviteSheet(t){
   const d=t.start?`${t.start.slice(5).replace("-","/")}${t.end?"–"+t.end.slice(5).replace("-","/"):""}`:"";
   const q=new URLSearchParams({openExternalBrowser:"1",n:t.name||"",by:whoAmI(t)||"",c:t.iso||"",d});
   const appLink=APP_URL+"?"+q.toString()+"#trip-"+t.id;
-  const cardLink=PUSH.url?PUSH.url.replace(/\/$/,"")+"/i?"+new URLSearchParams({t:t.id,n:t.name||"",by:whoAmI(t)||"",c:t.iso||"",d,openExternalBrowser:"1"}).toString():"";
+  const cardLink=PUSH.url?PUSH.url.replace(/\/$/,"")+"/i?"+new URLSearchParams({t:t.id,n:t.name||"",by:whoAmI(t)||"",c:t.iso||"",d,v:"2",openExternalBrowser:"1"}).toString():"";
   const img=new URL("og/"+(FLAG[t.iso]?t.iso:"default")+".jpg",location.href).href;
   let link=cardLink||appLink;
   const mkMsg=()=>`🧳 ${whoAmI(t)||"我"} 邀請你加入「${t.name}」一起記帳！\n${d?`📅 ${d}\n`:""}點連結、選一個可愛角色就能加入，不用註冊 👇\n${link}`;
