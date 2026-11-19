@@ -664,7 +664,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-zk";
+const APP_VER = "2026.11.19-zl";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2549,7 +2549,7 @@ async function aiRun(t,P){
   try{ const idToken=await FB.auth.currentUser.getIdToken();
     const c=new AbortController(); const to=setTimeout(()=>c.abort(),100000);
     const r=await fetch(PUSH.url.replace(/\/$/,"")+"/ai-plan",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({idToken,...body}),signal:c.signal});
-    clearTimeout(to); const js=await r.json().catch(()=>({})); if(!r.ok||!js.ok){ err=js.error||("錯誤 "+r.status); S.aiDetail=js.detail||""; } else res=js;
+    clearTimeout(to); const js=await r.json().catch(()=>({})); if(!r.ok||!js.ok){ err=js.error||("錯誤 "+r.status); S.aiDetail=js.detail||""; if(/empty/.test(S.aiDetail)&&P.note) err="AI 看不太懂這次的需求。請把「其他需求」寫短一點、具體一點（例如：想吃燒肉、下午去海邊），再試一次。"; } else res=js;
   }catch(e){ err=e.name==="AbortError"?"AI 回應太久（超過 100 秒），請再試一次":"需要網路才能使用 AI 排行程"; }
   clearInterval(tm); if(cancelled) return;
   if(!res){ openSheet(`<h3>沒有排成功</h3><div class="note">${esc(err)}</div>${S.aiDetail?`<details class="tiny" style="margin-top:8px"><summary style="cursor:pointer">技術資訊（回報問題時用）</summary><div data-notr style="word-break:break-all;user-select:text;margin-top:4px">${esc(S.aiDetail)}</div></details>`:""}<button class="btn" id="aiBack" style="margin-top:14px">返回</button>`); S.aiDetail=""; $("#aiBack").onclick=()=>aiSheet(t,P); return; }
@@ -2557,9 +2557,10 @@ async function aiRun(t,P){
 }
 function aiResult(t,P,res){
   const ds=planDays(t), wishById=Object.fromEntries(planItems(t,"wish").map(p=>[p.id,p]));
+  (res.days||[]).forEach((d,i)=>{ if(!ds.includes(d.date)) d.date=P.days[i]||P.days[0]; });
   const days=(res.days||[]).filter(d=>ds.includes(d.date)&&Array.isArray(d.items)).map(d=>({...d,items:d.items.filter(x=>x&&x.name).map(x=>({...x,on:true,cat:PCATS.some(c=>c.id===x.cat)?x.cat:guessCat(x.name),time:/^\d{1,2}:\d{2}$/.test(x.time||"")?x.time.padStart(5,"0"):"",stay:Math.max(0,Math.min(480,+x.stay||0)),wishId:wishById[x.wishId]?x.wishId:""}))}));
   const total=days.reduce((a,d)=>a+d.items.length,0);
-  if(!total){ openSheet(`<h3>沒有排成功</h3><div class="note">AI 這次沒有給出行程，請換個條件再試一次。</div><button class="btn" id="aiBack" style="margin-top:14px">返回</button>`); $("#aiBack").onclick=()=>aiSheet(t,P); return; }
+  if(!total){ openSheet(`<h3>沒有排成功</h3><div class="note">AI 這次沒有給出行程。${P.note?"可以把「其他需求」寫短一點、具體一點（例如：想吃燒肉、下午去海邊），再試一次。":"請換個條件再試一次。"}</div><button class="btn" id="aiBack" style="margin-top:14px">返回</button>`); $("#aiBack").onclick=()=>aiSheet(t,P); return; }
   const draw=()=>{ const n=days.reduce((a,d)=>a+d.items.filter(x=>x.on).length,0);
     openSheet(`<h3>${ic("spark")} AI 建議的行程</h3><div class="sec-d">取消勾選不要的地點，按「加入行程」後會自動定位，之後一樣可以拖曳調整。</div>
       ${days.map((d,di)=>`<div class="eyebrow" style="margin-top:12px">第 ${ds.indexOf(d.date)+1} 天・${d.date.slice(5).replace("-","/")}</div><div class="ptl" style="padding:2px 12px">${d.items.map((x,i)=>`<div class="prow aiit ${x.on?"":"off"}" data-ait="${di}|${i}">
