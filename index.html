@@ -597,7 +597,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-k";
+const APP_VER = "2026.11.19-l";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -3060,7 +3060,7 @@ function inviteSheet(t){
   const appLink=APP_URL+"?"+q.toString()+"#trip-"+t.id;
   const cardLink=PUSH.url?PUSH.url.replace(/\/$/,"")+"/i?"+new URLSearchParams({t:t.id,n:t.name||"",by:whoAmI(t)||"",c:t.iso||"",d,openExternalBrowser:"1"}).toString():"";
   const img=new URL("og/"+(FLAG[t.iso]?t.iso:"default")+".jpg",location.href).href;
-  let link=appLink;
+  let link=cardLink||appLink;
   const mkMsg=()=>`🧳 ${whoAmI(t)||"我"} 邀請你加入「${t.name}」一起記帳！\n${d?`📅 ${d}\n`:""}點連結、選一個可愛角色就能加入，不用註冊 👇\n${link}`;
   openSheet(`<h3>邀請旅伴</h3>
     <div class="sec-d">傳到 LINE 會變成一張卡片，朋友點開選個角色、輸入名字就加入了，只會看到這一趟的帳。</div>
@@ -3081,7 +3081,7 @@ function inviteSheet(t){
     $("#invLink").textContent=link; };
   $("#invMail").oninput=upd; upd();
   $("#invCopy").onclick=()=>copyText(mkMsg(),"邀請訊息");
-  if(cardLink) inviteCardOK().then(ok=>{ if(ok){ link=cardLink; upd(); } });
+
 }
 
 /* 分組 */
