@@ -655,7 +655,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-zg";
+const APP_VER = "2026.11.19-zh";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1875,7 +1875,7 @@ const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")+"==="
 async function pushPost(path,body){
   const idToken=await FB.auth.currentUser.getIdToken();
   const r=await fetch(PUSH.url.replace(/\/$/,"")+path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({idToken,...body}),keepalive:true});
-  if(!r.ok) throw new Error("push "+r.status); return r.json();
+  if(!r.ok){ let d=""; try{ const j=await r.json(); d=[j.error,j.detail].filter(Boolean).join(" ").slice(0,220); }catch(e){} throw new Error("push "+r.status+(d?" "+d:"")); } return r.json();
 }
 async function enablePush(prefs){
   const perm=await Notification.requestPermission();
@@ -2642,7 +2642,7 @@ async function gpSearch(q,iso){
   try{ const t=S.trips[S.tripId]||{}; const st=staysOf(t)[0];
     const r=await pushPost("/gp-search",{q,iso,session:GP_SES,...(st?.geo?{lat:st.geo.lat,lng:st.geo.lng}:{})});
     return (r.items||[]).map(x=>({name:x.name,addr:x.addr,gpid:x.id,lat:null,lng:null,osm:GT2OSM(x.types),g:true}));
-  }catch(e){ if(/40[34]|50[23]|429/.test(String(e.message))) S.gpOff=true; return null; }
+  }catch(e){ if(/push (40[34]|50[23]|429)/.test(String(e.message))) S.gpOff=true; return null; }
 }
 async function gpResolve(x){
   if(!x||!x.gpid||x.lat!=null) return x;
