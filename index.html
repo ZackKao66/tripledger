@@ -655,7 +655,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.19-zd";
+const APP_VER = "2026.11.19-ze";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2628,11 +2628,28 @@ async function geoFromText(q,iso){
   const area=parts.slice(1).map(x=>x.replace(/\b\d{3}-\d{4}\b|\b\d{5}\b/,"").trim()).filter(Boolean);
   const tries=[[name,false],[[street,...area].filter(Boolean).join(", "),false],[[name,...area.slice(0,1)].join(" "),false],[[street.replace(/chome|丁目|番地?|号/gi," ").replace(/[\d-]+/g," ").replace(/\s+/g," ").trim(),...area].filter(Boolean).join(", "),true],[area.join(", "),true],[zip?zip+(area.length?", "+area[area.length-1]:""):"",true]];
   for(const [tq,approx] of tries){ if(!tq||tq.length<2) continue;
-    try{ const hits=await geoSearch(tq,iso,1,false); if(hits&&hits[0]) return {lat:hits[0].lat,lng:hits[0].lng,name:name||hits[0].name,approx}; }catch(e){} }
+    try{ const hits=await geoSearch(tq,iso,1,false); if(hits&&hits[0]) await gpResolve(hits[0]); if(hits&&hits[0]&&hits[0].lat!=null) return {lat:hits[0].lat,lng:hits[0].lng,name:name||hits[0].name,approx}; }catch(e){} }
   if(aiOK()){ try{ const hits=await placeAI(q,iso); if(hits[0]) return {lat:hits[0].lat,lng:hits[0].lng,name:name||hits[0].name,approx:hits[0].approx}; }catch(e){} }
   return name?{lat:null,lng:null,name}:null;
 }
+/* Google 地點搜尋（經由自己的伺服器；用量有每日上限，超過自動改回免費搜尋） */
+let GP_SES=uid();
+const gpNewSession=()=>{ GP_SES=uid(); };
+const GT2OSM=ts=>{ const t=(ts||[]).join(","); return /lodging|hotel/.test(t)?{category:"tourism",type:"hotel"}:/airport/.test(t)?{category:"aeroway",type:"aerodrome"}:/train_station|subway_station|transit_station|bus_station/.test(t)?{category:"railway",type:"station"}:/cafe|bakery/.test(t)?{category:"amenity",type:"cafe"}:/restaurant|food|meal|bar/.test(t)?{category:"amenity",type:"restaurant"}:/shopping_mall|store|market/.test(t)?{category:"shop",type:"mall"}:/park|natural_feature/.test(t)?{category:"leisure",type:"park"}:/tourist_attraction|museum|place_of_worship|amusement|aquarium|zoo/.test(t)?{category:"tourism",type:"attraction"}:{category:"",type:""}; };
+async function gpSearch(q,iso){
+  if(S.gpOff||!isCloud()||!PUSH.url||!FB?.auth?.currentUser) return null;
+  try{ const t=S.trips[S.tripId]||{}; const st=staysOf(t)[0];
+    const r=await pushPost("/gp-search",{q,iso,session:GP_SES,...(st?.geo?{lat:st.geo.lat,lng:st.geo.lng}:{})});
+    return (r.items||[]).map(x=>({name:x.name,addr:x.addr,gpid:x.id,lat:null,lng:null,osm:GT2OSM(x.types),g:true}));
+  }catch(e){ if(/40[34]|50[23]|429/.test(String(e.message))) S.gpOff=true; return null; }
+}
+async function gpResolve(x){
+  if(!x||!x.gpid||x.lat!=null) return x;
+  try{ const d=await pushPost("/gp-detail",{id:x.gpid,session:GP_SES}); gpNewSession(); if(d&&isFinite(d.lat)){ x.lat=d.lat; x.lng=d.lng; x.addr=x.addr||d.addr; } }catch(e){}
+  return x;
+}
 async function geoSearch(q,iso,limit=6,useAI=true){
+  { const gp=await gpSearch(q,iso); if(gp&&gp.length) return gp.slice(0,limit); }
   const lang=LANG==="en"?"en":"zh-TW,zh,en";
   const nom=async cc=>{ try{ const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=${limit}&accept-language=${lang}${cc}&q=${encodeURIComponent(q)}`); const js=await r.json();
     return js.map(x=>({name:x.name||String(x.display_name).split(",")[0],addr:String(x.display_name).split(",").slice(1,4).join(",").trim(),lat:+x.lat,lng:+x.lon,osm:{category:x.category,type:x.type}})); }catch(e){ return null; } };
@@ -2684,7 +2701,7 @@ function staySheet(t,old,back){
   drawOut(addDays(st.checkin,Math.max(1,+st.nights||1)));
   $("#stIn").onchange=()=>drawOut($("#stOut").value); $("#stOut").onchange=showN;
   const showRes=()=>{ $("#stRes").innerHTML=st.res.length?`<div class="sec tight" style="margin-top:8px">${st.res.map((x,i)=>`<div class="prow" data-sr="${i}" style="cursor:pointer">${pcIcon("hotel")}<div class="grow" style="min-width:0"><div>${esc(x.name)}${x.ai?` <span class="pill" style="font-size:10.5px">${ic("spark")}AI 辨識</span>`:""}</div><div class="tiny">${esc(x.addr||"")}${x.ai&&x.approx?"・位置為約略":""}</div></div></div>`).join("")}</div>`:`<div class="tiny" style="margin-top:8px">找不到「${esc($("#stQ").value.trim())}」。可以換成英文或當地名稱，或在 Google 地圖按「分享 › 複製連結」貼上</div>`;
-    $$("[data-sr]").forEach(r=>r.onclick=()=>{ const x=st.res[+r.dataset.sr]; st.approx=!!x.approx; st.geo={lat:x.lat,lng:x.lng,name:x.name}; $("#stQ").value=x.name; $("#stRes").innerHTML=""; drawGeo(); }); };
+    $$("[data-sr]").forEach(r=>r.onclick=async()=>{ const x=st.res[+r.dataset.sr]; if(x.gpid&&x.lat==null){ r.style.opacity=.5; await gpResolve(x); r.style.opacity=""; if(x.lat==null){ toast("暫時無法取得位置，請再試一次"); return; } } st.approx=!!x.approx; st.geo={lat:x.lat,lng:x.lng,name:x.name}; $("#stQ").value=x.name; $("#stRes").innerHTML=""; drawGeo(); }); };
   const search=async()=>{ let v=$("#stQ").value.trim(); if(!v) return; $("#stRes").innerHTML=`<div class="tiny" style="margin-top:8px">搜尋中…（找不到時會用 AI 辨識，約需 5 秒）</div>`;
     const u=urlIn(v);
     if(u){ let label=v.replace(u,"").split("\n").map(x=>x.trim()).filter(Boolean)[0]||""; if(!label){ const pm=u.match(/\/place\/([^/@?]+)/); if(pm){ try{ label=decodeURIComponent(pm[1].replace(/\+/g," ")); }catch(e){} } }
@@ -2940,7 +2957,7 @@ function planSheet(t,old,preDay){
     try{
       const js=await geoSearch(v,t.iso,6,false); if(seq!==qSeq) return;
       const pv=prevItem();
-      st.res=js.map(x=>({...x,cat:guessCat(x.name,x.osm),far:pv?.geo?hav(pv.geo,x):null}));
+      st.res=js.map(x=>({...x,cat:guessCat(x.name,x.osm),far:pv?.geo&&x.lat!=null?hav(pv.geo,x):null}));
       drawGeo();
     }catch(e){ if(seq===qSeq) toast("搜尋需要網路，請稍後再試"); }
   };
@@ -2966,7 +2983,7 @@ function planSheet(t,old,preDay){
     const q=$("#plQ");
     q.oninput=()=>{ st.q=q.value; clearTimeout(qT); const v=q.value.trim(); if(!v&&st.res){ st.res=null; drawGeo(); const n=$("#plQ"); n&&n.focus(); return; } if(v.length<2){ return; } qT=setTimeout(()=>search(v),urlIn(v)?50:650); };
     q.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); clearTimeout(qT); const v=q.value.trim(); if(v) search(v); } };
-    $$("[data-geo]").forEach(r=>r.onclick=()=>{ const g=st.res[+r.dataset.geo]; st.place=null; pick(g,g.osm); });
+    $$("[data-geo]").forEach(r=>r.onclick=async()=>{ const g=st.res[+r.dataset.geo]; st.place=null; if(g.gpid&&g.lat==null){ r.style.opacity=.5; await gpResolve(g); r.style.opacity=""; if(g.lat==null){ toast("暫時無法取得位置，請再試一次"); return; } } pick(g,g.osm); });
     $$("[data-hist]").forEach(r=>r.onclick=()=>{ const g=st.hist[+r.dataset.hist]; st.place=null; if(!st.catTouched){ st.cat=g.cat; st.catTouched=true; drawCat(); } pick({lat:g.lat,lng:g.lng,name:g.name,addr:g.addr},null); });
     $("#histClr")&&($("#histClr").onclick=()=>{ try{ localStorage.removeItem(PH_KEY); }catch(e){} drawGeo(); });
   };
