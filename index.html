@@ -617,6 +617,13 @@ input,select,textarea,.inp,.inp.sm,.fbar .inp,.fpanel select,.cursel{font-size:1
 .scard.kit .slg2 .i{color:var(--sub)!important}
 .amt b{font-size:17px}
 .stickybar.on,.stickybar.show,.stickybar[data-on]{box-shadow:0 1px 0 var(--line)}
+
+.hintc{display:flex;align-items:flex-start;gap:10px;background:var(--pri-soft);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.55;color:var(--ink2)}
+.hintc>.i{width:16px;height:16px;color:var(--sub);margin-top:2px}.hintc .lnk{flex:none;font-size:13px;margin:-8px -4px -8px 0}
+.helpl{display:grid;gap:8px}.helpi{background:var(--surface);border-radius:12px}
+.helpi summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;font-weight:600;cursor:pointer;min-height:48px}
+.helpi summary::-webkit-details-marker{display:none}.helpi summary .i{width:16px;height:16px;color:var(--sub);transition:transform .2s}.helpi[open] summary .i{transform:rotate(90deg)}
+.helpb{padding:0 16px 14px;font-size:14px;line-height:1.7;color:var(--ink2)}.helpb p{margin:0 0 8px}.helpb p:last-child{margin:0}
 </style>
 </head>
 <body>
@@ -722,7 +729,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.20-dx";
+const APP_VER = "2026.11.20-dy";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1540,7 +1547,9 @@ function profileSheet(focusPay){
     <button class="btn" id="pfSave" style="margin-top:16px">儲存</button>
     ${pushSection()}
     ${langRow()}
-    <button class="btn line" id="pfShare" style="margin-top:22px;gap:10px">${ic("heart")}推薦旅帳給朋友</button>
+    <button class="btn line" id="pfHelp" style="margin-top:22px;gap:10px">${ic("receipt")}使用說明</button>
+    <button class="btn line" id="pfRates" style="margin-top:10px;gap:10px">${ic("swap")}臺銀匯率表<span class="tiny num" style="font-weight:400">${esc(S.rates.updatedAt||"")}</span></button>
+    <button class="btn line" id="pfShare" style="margin-top:10px;gap:10px">${ic("heart")}推薦旅帳給朋友</button>
     <button class="btn line" id="pfImport" style="margin-top:10px;gap:10px">${ic("repeat")}匯入備份檔</button>
     <button class="btn line" id="pfOut" style="margin-top:10px">登出</button>
     <div class="tiny" style="text-align:center;margin-top:14px" data-notr>旅帳 v${APP_VER}</div>`);
@@ -1557,6 +1566,8 @@ function profileSheet(focusPay){
   if(focusPay) setTimeout(()=>{ const x=$("#pfPay"); if(x){ x.scrollIntoView({block:"center"}); x.focus(); } },250);
   let pfAv=S.myAv||""; bindAvPicker("pfAv",k=>pfAv=k);
   $("#pfLink")&&($("#pfLink").onclick=linkGoogle);
+  $("#pfHelp")&&($("#pfHelp").onclick=helpSheet);
+  $("#pfRates")&&($("#pfRates").onclick=ratesSheet);
   $("#pfXfer")&&($("#pfXfer").onclick=xferSheet);
   $("#pfShare")&&($("#pfShare").onclick=shareAppSheet);
   $("#pfImport")&&($("#pfImport").onclick=()=>{ const f=$("#backupPick"); f.value=""; f.onchange=async()=>{ const file=f.files[0]; if(!file) return; closeSheet(); try{ const data=JSON.parse(await file.text()); await importBackup(data); }catch(e){ toast("無法讀取這個備份檔"); } }; f.click(); });
@@ -1599,9 +1610,6 @@ function homeView(){
       <div class="empty"><div class="t">開始第一段旅程</div>選擇目的地後，幣別與匯率會自動帶入。<br>收到朋友的邀請連結？直接點開即可加入。
         ${RO()?"":`<div style="display:flex;gap:8px;justify-content:center;margin-top:18px"><button class="btn sm line" id="demoBtn">${ic("spark")}建立範例旅程</button><button class="btn sm line" id="onbBtn">使用導覽</button></div>`}</div>`}
     ${migrateCard()}${installBanner()?"":linkNag(trips)}
-    <div class="eyebrow">臺銀匯率</div>
-    <div class="sec"><div class="row"><div class="grow"><div class="sec-t" style="margin:0">臺灣銀行牌告匯率</div><div class="tiny num" style="margin-top:3px">掛牌時間 ${esc(S.rates.updatedAt)}</div></div>
-      <button class="btn sm line" id="showRates">匯率表</button></div></div>
 
   </div>
   ${RO()||S.mode==="loading"?"":`<button class="fab" id="newTrip">${ic("plus")}新增旅程</button>`}`;
@@ -1762,6 +1770,29 @@ function fxMine(t,C,ids,date,withPriv=true){
 const moneyT=(t,fx,twd)=>fx==null?ntdT(twd):curT(Math.round(fx),t.currency);
 const TAB_T={plan:["行程","每天去哪裡、怎麼走"],split:["分帳","誰該付給誰、付清了沒"],wallet:["錢包","手上的外幣現金和公費"],stat:["統計","我花了多少、花在哪裡"],set:["設定","旅伴、旅程資訊與備份"]};
 function tabTitle(){ const x=TAB_T[S.tab]; return x?`<h1 class="tabttl">${x[0]}</h1>`:""; }
+/* 第一次才出現的說明：按「知道了」就不再顯示；設定裡可重新顯示 */
+function hint(key,html,style=""){
+  try{ if(localStorage.getItem("tl_h_"+key)) return ""; }catch(e){ return ""; }
+  return `<div class="hintc" data-hint="${key}" style="${style}">${ic("spark")}<div class="grow">${html}</div><button class="lnk" data-hintx="${key}">知道了</button></div>`;
+}
+document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-hintx]"); if(!b) return; try{ localStorage.setItem("tl_h_"+b.dataset.hintx,"1"); }catch(_){} b.closest(".hintc")?.remove(); });
+const HELP=[
+ ["start","開始使用",`<p>建立旅程時選目的地，幣別和臺銀匯率會自動帶入。旅程裡的「設定 › 旅伴與邀請」可以用 LINE 邀請朋友，朋友選一個角色就能加入，不用註冊。</p>`],
+ ["add","記一筆",`<p>按右下角「＋」。輸入當地金額，會自動換算台幣：現金用臺銀現金賣出價，刷卡用即期賣出價再加國外交易手續費。</p><p>「大家分帳」會算進分帳；「只記自己」是私人花費，只有你看得到。</p><p>在紀錄上往左滑可以編輯、刪除，往右滑可以複製一筆。</p>`],
+ ["split","分帳與結算",`<p>「分帳」頁會算出每個人付了多少、應付多少，並給出轉帳次數最少的結算建議。</p><p>付完錢按「已付款」，收款的人確認後就完成。可以在大頭貼頁填好收款方式（銀行帳號、LINE Pay、街口），結算時一鍵複製給朋友。</p><p>情侶或家庭可以在「設定 › 分組」綁成一組，組內誰付都一樣。</p>`],
+ ["kitty","公費",`<p>在「設定 › 公費」開啟並指定保管人。大家先繳一筆錢給保管人，之後付款人選「公費」就會從公費扣。</p><p>朋友先代墊、要公費還的，記帳時在「更多選項」選付款人，再開「由公費報銷」。</p><p>公費金額一律以當地貨幣顯示，台幣小字是參考換算；旅程結束時多退少補。</p>`],
+ ["cash","錢包與外幣現金",`<p>在「錢包」記下你換了多少外幣，用現金付款時會自動扣，也會用你實際換到的匯率算台幣，比牌告更準。</p>`],
+ ["card","信用卡對帳",`<p>刷卡金額一開始是用匯率估的。收到信用卡帳單後，到「統計 › 信用卡對帳」填入實際扣款金額，分帳就會完全準確。旅程結束後首頁也會提醒你。</p>`],
+ ["plan","行程與 AI",`<p>在「行程」頁按「新增行程」可以搜尋地點或貼 Google 地圖連結，也可以讓 AI 依你的喜好排好幾天的行程，確認後才會加入。</p><p>每個地點可以填訂位代號，到現場點一下就能出示。住宿、交通方式和每天的出發地也都在這裡設定。</p>`],
+ ["move","換手機或加到主畫面",`<p>免登入角色的資料存在這支手機的瀏覽器裡。要搬到主畫面 App 或新手機，到大頭貼頁按「搬到主畫面 App／換手機」取得轉移碼。</p><p>想永久保險，可以「綁定 Google」，之後任何手機都能直接登入。</p>`],
+ ["notify","通知",`<p>把旅帳「加入主畫面」再從桌面打開，才能在大頭貼頁開啟通知，旅伴記帳、提醒付款時會馬上收到。</p>`],
+];
+function helpSheet(){
+  openSheet(`<h3>${ic("receipt")} 使用說明</h3>
+    <div class="helpl">${HELP.map(([k,tt,body])=>`<details class="helpi"><summary>${tt}${ic("chev")}</summary><div class="helpb">${body}</div></details>`).join("")}</div>
+    <button class="btn line" id="hintReset" style="margin-top:16px">重新顯示各頁的小提示</button>`);
+  $("#hintReset").onclick=()=>{ try{ Object.keys(localStorage).filter(k=>k.startsWith("tl_h_")).forEach(k=>localStorage.removeItem(k)); }catch(e){} closeSheet(); toast("各頁的小提示會再出現一次"); render(); };
+}
 function reconNag(t,C){
   if(RO()||!t.end||today()<=t.end) return "";
   const pend=[...C.exps,...C.priv].filter(e=>(e.method==="card"||e.method==="mobile")&&e.cur!=="TWD"&&(e.actualTWD==null||e.actualTWD==="")&&(e.payer===C.me||e.private||!C.me));
@@ -2247,7 +2278,7 @@ function splitTab(t,C){
       return `<div class="prow">${av(t,u.id)}<div class="grow"><div>${esc(nameOf(t,u.id))}${u.members.includes(me)?'<span class="tiny">（我）</span>':""}</div><div class="tiny">付了 ${mH(t,pd+ct)}${ct?`（含公費 ${mH(t,ct)}）`:""}<br>應付 ${mH(t,sh)}</div></div>
       ${netTag(n,t)}</div>`}).join(""):null;
   const cardTodo=C.exps.filter(e=>(e.method==="card"||e.method==="mobile")&&e.cur!=="TWD"&&(e.actualTWD==null||e.actualTWD===""));
-  return `${units?`<div class="seg s2 flat" id="svw" style="margin-top:14px"><button data-sv="unit" class="${view==="unit"?"on":""}">按組算（家庭／情侶）</button><button data-sv="person" class="${view==="person"?"on":""}">每個人分開算</button></div><div class="tiny" style="margin:8px 4px 0">${view==="unit"?"同一組的人合在一起算，組內誰付都一樣":"不管分組，每個人各自算自己的帳"}</div>`:""}
+  return `${units?`<div class="seg s2 flat" id="svw" style="margin-top:14px"><button data-sv="unit" class="${view==="unit"?"on":""}">按組算（家庭／情侶）</button><button data-sv="person" class="${view==="person"?"on":""}">每個人分開算</button></div>${hint("splitmode","「按組算」會把情侶、家庭合在一起，組內誰付都一樣；「每個人分開算」則各算各的。","margin:10px 0 0")}`:""}
   <div class="eyebrow"><span>收支</span>${dispRate(t)?`<span class="seg s2 flat" style="width:auto;letter-spacing:0;text-transform:none;font-family:inherit">${[["local",`${SYM[t.currency]||""} ${t.currency}`],["twd","NT$ 台幣"]].map(([k,l])=>`<button data-sc="${k}" class="${(S.splitCur||"local")===k?"on":""}" style="min-height:36px;padding:6px 12px;font-size:13px;font-family:var(--num);font-weight:600">${l}</button>`).join("")}</span>`:""}</div><div class="sec tight">
     ${balBars(t,unitRows!==null?PN.parties.map(u=>[u.id,PN.net[u.id]||0]):(t.members||[]).map(m=>[m.id,C.net[m.id]||0]),me)}
     ${unitRows!==null?unitRows:(t.members||[]).map(m=>{const n=C.net[m.id]||0;
@@ -2256,7 +2287,7 @@ function splitTab(t,C){
     ${t.kitty?.enabled?(()=>{ const n=Math.round(C.net[KITTY]||0); return `<div class="prow">${av(t,KITTY)}<div class="grow"><div>公費</div><div class="tiny">保管人 ${esc(nameOf(t,t.kitty.keeper))}　結餘 ${kittyBig(t,C)}</div></div>${n===0?`<div class="num tiny">已結清</div>`:`<div style="text-align:right;white-space:nowrap"><div class="num ${n>0?"pos":"neg"}">${n>0?"+":"−"}${kmT(t,C,Math.abs(n)).replace(/^NT\$ /,"")}</div>${useLocal(t)?`<div class="tiny num">${ntdT(Math.abs(n))}</div>`:""}</div>`}</div>`; })():""}
   </div>
   <div class="eyebrow">結算建議</div><div class="sec">
-    <div class="sec-d" style="margin-bottom:4px">照這樣轉帳次數最少。付完按「已付款」，對方確認就完成。</div>
+    ${hint("settle","照這樣轉帳次數最少。付完按「已付款」，對方確認就完成。","margin:0 0 6px")}
     ${!t.settled&&!s.length&&C.exps.length&&C.transfers.every(e=>e.confirmed)?`<div class="note g" style="margin-top:6px">所有款項都已結清。${isOwnerOf(t)?"封存後旅程會鎖定成唯讀，避免誤改；之後仍可重新開啟。":"等待旅程建立者封存旅程。"}</div>${isOwnerOf(t)&&!S.readOnly?`<button class="btn" id="archive" style="margin-top:12px">${ic("check")}封存旅程</button>`:""}`:""}
     ${(S._psShown=0,"")}${s.length?s.map(([a,b,x])=>`<div style="padding:14px 0;border-bottom:1px solid var(--line2)">
       <div class="row" style="gap:8px;flex-wrap:wrap">${av(t,a)}<span>${esc(nameOf(t,a))}</span><span class="arrow">→</span>${av(t,b)}<span>${esc(nameOf(t,b))}</span></div>
@@ -2333,7 +2364,7 @@ function walletTab(t,C){
       <div>${(t.members||[]).map(m=>{const o=kitBy[m.id]; return `<div class="krow">${av(t,m.id)}<span class="grow">${esc(m.name)}</span>
         ${o?`<div class="amt"><b class="num">${Object.entries(o.cur).map(([c,v])=>curT(v,c)).join("、")}</b><span class="tiny num">${Object.keys(o.cur).some(c=>c!=="TWD")?ntdT(o.twd)+"・":""}${o.n} 筆</span></div>`:`<span class="tiny">尚未繳交</span>`}</div>`}).join("")}</div>
       ${RO()?"":`<div class="btnrow" style="margin-top:14px"><button class="btn sm" id="kitIn" style="width:100%">${ic("plus")}繳交公費</button><button class="btn sm line" id="kitEx" style="width:100%">${ic("swap")}公費換匯</button></div>`}
-      <div class="tiny" style="margin-top:12px">付款人選「公費」就會從這裡扣，結算時多退少補。</div>
+      ${hint("kitty","記帳時付款人選「公費」就會從這裡扣，旅程結束時多退少補。","margin:12px 0 0")}
     </div>
     ${C.reimbPending.length?`<div class="eyebrow">待公費報銷・${C.reimbPending.length} 筆</div><div class="sec tight">${C.reimbPending.map(e=>`<div class="krow">${av(t,e.payer)}<div class="grow" data-exp="${esc(e.id)}" data-p="0" style="cursor:pointer"><div style="font-size:14px">還給 ${esc(nameOf(t,e.payer))}・${esc(e.title||catOf(t,e.cat).name)}</div><div class="tiny num">${esc((e.date||"").slice(5).replace("-","/"))} ${nameOf(t,e.payer)} 先墊</div></div>
       <div class="amt"><b class="num">${e.cur!=="TWD"?curT(e.amount,e.cur):ntdT(finalTWD(e))}</b>${RO()?"":`<button class="btn xs" data-rbdone="${esc(e.id)}" style="margin-top:4px">已還</button>`}</div></div>`).join("")}</div>
@@ -2341,7 +2372,7 @@ function walletTab(t,C){
     ${led.length?`<div class="eyebrow">公費收支</div><div class="sec tight">${led.map(ledRow).join("")}</div>`:""}`:`<div class="sec"><div class="row"><span class="ic sm">${ic("kitty")}</span><div class="grow"><div style="font-weight:700">公費</div><div class="tiny">大家先繳一筆，共同開銷從這裡付</div></div>${RO()?"":`<button class="btn sm line" id="kitOn">啟用</button>`}</div></div>`}
   <div class="eyebrow">外幣現金 ${RO()?"":`<button class="lnk" id="addExch">＋ 換匯紀錄</button>`}</div>
   <div class="sec">
-    <div class="sec-d">記下換了多少外幣，現金花費會自動扣除，也會用你的實際匯率算台幣。</div>
+    ${hint("cash","記下換了多少外幣，用現金付款時會自動扣，也會用你實際換到的匯率算台幣。","margin:0 0 8px")}
     ${holders.length?holders.map(block).join(""):`<div class="tiny">尚無換匯紀錄</div>`}
   </div>
   ${exchList.length?`<div class="eyebrow">換匯紀錄</div><div class="sec tight">${exchList.map(e=>`<div class="recrow" data-rec="${esc(e.id)}">${av(t,e.member)}<div class="grow"><div>${esc(nameOf(t,e.member))}　${fmtCur(e.amount,e.cur)}${C.dups.has(e.id)?'<span class="pill w" style="margin-left:6px">可能重複</span>':""}</div><div class="tiny num">${esc(e.date||"")}　匯率 ${rateFmt(e.twd/e.amount)}</div></div><b>${ntd(e.twd)}</b></div>`).join("")}</div>`:""}
@@ -3515,6 +3546,7 @@ function setTab(t){
     <div class="row"><span class="grow tiny">現金用現金賣出價、刷卡用即期賣出價加手續費</span><button class="btn sm line" id="showRates">匯率表</button></div>
     <button class="btn line" id="backupBtn" style="margin-top:12px">${ic("download")}匯出備份檔</button>
     <div class="tiny" style="margin-top:6px">可在大頭貼頁「匯入備份檔」還原（不含收據照片）</div>`)}
+  <button class="btn line" id="helpBtn" style="margin:4px 0 12px;gap:10px">${ic("receipt")}使用說明</button>
   ${RO()?"":isOwnerOf(t)?`<button class="btn danger" id="delTrip" style="margin-top:8px">刪除旅程</button>`:`<div class="tiny" style="text-align:center;padding:6px 0 10px">刪除旅程與移除旅伴僅限建立者操作</div>`}`;
 }
 
@@ -3574,6 +3606,7 @@ function bindRows(t){
 function bindTripRest(t){
   $$("[data-rec]").forEach(el=>el.onclick=()=>{const e=S.entries[el.dataset.rec]; if(!e)return; e.kind==="exchange"?exchSheet(t,e):kitInSheet(t,e);});
   $("#showRates")&&($("#showRates").onclick=ratesSheet);
+  $("#helpBtn")&&($("#helpBtn").onclick=helpSheet);
   $("#copySettle")&&($("#copySettle").onclick=()=>copyText(settleText(t,compute(t)),"結算內容"));
   $("#inviteBtn")&&($("#inviteBtn").onclick=()=>inviteSheet(t));
   $("#claimBtn")&&($("#claimBtn").onclick=()=>claimSheet(t));
