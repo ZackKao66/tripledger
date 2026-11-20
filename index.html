@@ -716,7 +716,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.20-du";
+const APP_VER = "2026.11.20-dv";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1632,7 +1632,23 @@ function bindHome(){
 }
 function openTrip(id,fromHash){
   try{ const k="tripsplit_seen_"+id; if(S.seenPrev[id]==null) S.seenPrev[id]=Number(localStorage.getItem(k)||0); localStorage.setItem(k,String(Date.now())); }catch(e){ if(S.seenPrev[id]==null) S.seenPrev[id]=0; }
-  S.tripId=id; S.tab="list"; Store.watch(id); if(!fromHash) setHash("trip-"+id); render(); window.scrollTo(0,0); }
+  S.tripId=id; S.tab="list"; S.navStack=[]; S.listY=0; Store.watch(id); if(!fromHash) setHash("trip-"+id); render(); window.scrollTo(0,0); }
+/* 頁面導覽：連結跳頁會記住來源（含捲動位置），返回鍵回到來源；
+   用底部分頁切換是同一層，返回鍵回到「明細」主頁；在明細按返回才回旅程列表 */
+function goTab(tab,opt={}){
+  if(opt.drill&&S.tab!==tab){ (S.navStack||(S.navStack=[])).push({tab:S.tab,y:window.scrollY,planDay:S.planDay}); }
+  else if(!opt.drill){ S.navStack=[]; }
+  if(S.tab==="list") S.listY=window.scrollY;
+  S.tab=tab; render();
+  if(opt.to){ requestAnimationFrame(()=>{ const el=document.querySelector(opt.to); if(!el){ window.scrollTo(0,0); return; } const top=document.querySelector(".top")?.getBoundingClientRect().height||70; window.scrollTo(0,Math.max(0,el.getBoundingClientRect().top+window.scrollY-top-8)); }); }
+  else window.scrollTo(0,0);
+}
+function navBack(){
+  const st=S.navStack||[];
+  if(st.length){ const b=st.pop(); S.tab=b.tab; if(b.planDay) S.planDay=b.planDay; render(); requestAnimationFrame(()=>window.scrollTo(0,b.y||0)); return; }
+  if(S.tab!=="list"){ S.tab="list"; render(); const y=S.listY||0; requestAnimationFrame(()=>window.scrollTo(0,y)); return; }
+  S.navStack=[]; goHome();
+}
 function goHome(fromHash){ const t=S.trips[S.tripId]; if(t) cacheTotal(t); Store.unwatch(); S.tripId=null; if(!fromHash) setHash("trips"); render(); window.scrollTo(0,0); }
 
 function tripPhase(t){
@@ -3495,7 +3511,7 @@ function setTab(t){
 }
 
 function bindTrip(t){
-  $("#back").onclick=()=>{ if(S.tab==="set"){S.tab=S.prevTab||"list";render();window.scrollTo(0,0);} else goHome(); };
+  $("#back").onclick=navBack;
   $$("details.set").forEach(d=>d.addEventListener("toggle",()=>{ S.setOpen={...(S.setOpen||{members:true}),[d.dataset.sk]:d.open}; }));
   $("#setFee")&&!RO()&&($("#setFee").onchange=async e=>{ const v=parseNum(e.target.value); if(v===Number(t.cardFee??1.5)) return; try{await Store.saveTrip({...t,cardFee:v}); toast("已更新手續費")}catch(_){} });
   $("#backupBtn")&&($("#backupBtn").onclick=lock(async()=>exportBackup(t)));
@@ -3506,12 +3522,12 @@ function bindTrip(t){
   $("#archive")&&($("#archive").onclick=lock(async()=>{ if(!await confirmBox("封存後旅程會鎖定成唯讀，確定封存？","封存",false))return; try{await Store.saveTrip({...t,settled:true,settledAt:Date.now()}); toast("旅程已封存"); }catch(_){} }));
   $("#reopen")&&($("#reopen").onclick=lock(async()=>{ try{await Store.saveTrip({...t,settled:false,settledAt:null}); toast("已重新開啟，可以繼續編輯"); }catch(_){} }));
   $("#reviewTop")&&($("#reviewTop").onclick=()=>reviewSheet(t));
-  $("#heroMini")&&($("#heroMini").onclick=()=>{ S.tab="list"; render(); window.scrollTo(0,0); });
+  $("#heroMini")&&($("#heroMini").onclick=()=>goTab("list"));
   $("#kShortBtn")&&($("#kShortBtn").onclick=()=>kitInSheet(t));
   $("#jtX")&&($("#jtX").onclick=()=>{ try{localStorage.setItem("tripsplit_jt_"+t.id,"1")}catch(_){} render(); });
   $("#jtAdd")&&($("#jtAdd").onclick=()=>$("#addExp")?.click());
-  $("#jtSplit")&&($("#jtSplit").onclick=()=>{ S.tab="split"; render(); window.scrollTo(0,0); });
-  $("#stPend")&&($("#stPend").onclick=()=>{ S.tab="wallet"; render(); setTimeout(()=>document.getElementById("kittySec")?.scrollIntoView({behavior:"smooth"}),80); });
+  $("#jtSplit")&&($("#jtSplit").onclick=()=>goTab("split",{drill:true}));
+  $("#stPend")&&($("#stPend").onclick=()=>goTab("wallet",{drill:true,to:"#kittySec"}));
   $("#reviewBtn")&&($("#reviewBtn").onclick=()=>reviewSheet(t));
   $("#mapBtn")&&($("#mapBtn").onclick=()=>mapSheet(t));
   $$("[data-sc2]").forEach(b=>b.onclick=()=>{ S.lscope=b.dataset.sc2; render(); });
@@ -3519,17 +3535,17 @@ function bindTrip(t){
   showConvCoach();
   $("#tcConv")&&($("#tcConv").onclick=()=>convSheet(t));
   $("#tcToggle")&&($("#tcToggle").onclick=()=>{ S.tcMin=!S.tcMin; try{ localStorage.setItem("tripsplit_tcmin",S.tcMin?"1":""); }catch(e){} render(); });
-  $("#tcPlan")&&($("#tcPlan").onclick=()=>{ S.tab="plan"; S.planDay=today(); render(); window.scrollTo(0,0); });
+  $("#tcPlan")&&($("#tcPlan").onclick=()=>{ S.planDay=today(); goTab("plan",{drill:true}); });
   $$("[data-pexp]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const p=(S.plan||{})[b.dataset.pexp]; if(p) expFromPlan(t,p); });
   if(S.tab==="plan") bindPlan(t); else stopWalk();
-  $("#kstrip")&&($("#kstrip").onclick=()=>{S.tab="wallet";render();setTimeout(()=>$("#kittySec")?.scrollIntoView({behavior:"smooth",block:"start"}),60)});
-  $("#gear")&&($("#gear").onclick=()=>{ if(S.tab==="set") S.tab=S.prevTab||"list"; else { S.prevTab=S.tab; S.tab="set"; } render(); window.scrollTo(0,0); });
+  $("#kstrip")&&($("#kstrip").onclick=()=>goTab("wallet",{drill:true,to:"#kittySec"}));
+  $("#gear")&&($("#gear").onclick=()=>{ if(S.tab==="set") navBack(); else goTab("set",{drill:true}); });
   $("#feedBtn")&&($("#feedBtn").onclick=()=>{feedSheet(t); S.feedHidden[t.id]=true; S.seenPrev[t.id]=Date.now(); render();});
   $("#feedAll")&&($("#feedAll").onclick=()=>feedSheet(t));
   $("#feedX")&&($("#feedX").onclick=()=>{S.feedHidden[t.id]=true;render()});
   $("#imgSettle")&&($("#imgSettle").onclick=async()=>{ const b=$("#imgSettle"); b.disabled=true; try{await settleImage(t)}catch(e){toast("圖卡產生失敗")} b.disabled=false; });
   $("#themeBtn2")&&($("#themeBtn2").onclick=()=>{cycleTheme();render()});
-  $$("[data-tab]").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render();window.scrollTo(0,0)});
+  $$("[data-tab]").forEach(b=>b.onclick=()=>goTab(b.dataset.tab));
   $("#addExp")&&($("#addExp").onclick=()=>{ if(S.tab==="plan"){ hideFabTip(); planFab(t); } else expSheet(t); });
   $("#fabTipX")&&($("#fabTipX").onclick=hideFabTip);
   bindRows(t);
@@ -3654,7 +3670,7 @@ function bindSwipe(t){
 }
 async function enableKitty(t){
   const keeper=t.kitty?.keeper||meId(t)||t.members[0]?.id;
-  try{await Store.saveTrip({...t,kitty:{enabled:true,keeper}}); S.tab="wallet"; toast("已啟用公費"); render();}catch(e){}
+  try{await Store.saveTrip({...t,kitty:{enabled:true,keeper}}); toast("已啟用公費"); goTab("wallet",{drill:S.tab!=="wallet"});}catch(e){}
 }
 async function cacheTotal(t){
   const C=compute(t); const total=Math.round(C.total); const kb=t.kitty?.enabled?Math.round(C.kittyBal):null;
