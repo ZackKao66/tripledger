@@ -729,7 +729,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.20-dz";
+const APP_VER = "2026.11.20-e1";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1132,15 +1132,15 @@ function compute(t){
   const ids=[...(t.members||[]).map(m=>m.id),KITTY];
   const net={},paid={},share={}; ids.forEach(i=>{net[i]=0;paid[i]=0;share[i]=0});
   const add=(o,k,v)=>{o[k]=(o[k]||0)+v};
-  let kittyIn=0,kittySpent=0;
+  let kittyIn=0,kittySpent=0; const kInC={}, kOutC={}; const kc=(m,c,v)=>{ if(v) m[c||"TWD"]=(m[c||"TWD"]||0)+v; };
   for(const e of exps){
     const v=finalTWD(e); add(net,e.payer,v); add(paid,e.payer,v);
-    if(e.payer===KITTY) kittySpent+=v;
-    if(e.reimb==="done"&&e.payer!==KITTY&&!e.private&&t.kitty?.enabled){ add(net,KITTY,v); add(net,e.payer,-v); kittySpent+=v; }
+    if(e.payer===KITTY){ kittySpent+=v; kc(kOutC,e.cur,Number(e.amount)||0); }
+    if(e.reimb==="done"&&e.payer!==KITTY&&!e.private&&t.kitty?.enabled){ add(net,KITTY,v); add(net,e.payer,-v); kittySpent+=v; kc(kOutC,e.cur,Number(e.amount)||0); }
     const sh=sharesOf(e,v); for(const id in sh){add(net,id,-sh[id]); add(share,id,sh[id]);}
   }
   const contrib={};
-  for(const e of all.filter(e=>e.kind==="kitty_in")){ const v=Number(e.twd||0); add(net,e.member,v); add(net,KITTY,-v); add(contrib,e.member,v); kittyIn+=v; }
+  for(const e of all.filter(e=>e.kind==="kitty_in")){ const v=Number(e.twd||0); add(net,e.member,v); add(net,KITTY,-v); add(contrib,e.member,v); kittyIn+=v; kc(kInC,e.cur,Number(e.amount)||0); }
   const transfers=all.filter(e=>e.kind==="transfer");
   let kittyXfer=0;
   for(const e of transfers){ const v=Number(e.twd||0); add(net,e.from,v); add(net,e.to,-v); if(e.from===KITTY)kittyXfer-=v; if(e.to===KITTY)kittyXfer+=v; }
@@ -1168,7 +1168,7 @@ function compute(t){
   const privTotal=priv.reduce((a,e)=>a+finalTWD(e),0);
   const myShare=me?(share[me]||0)+privTotal:0;
   const fees=exps.reduce((a,e)=>a+Number(e.fee||0),0)+priv.reduce((a,e)=>a+Number(e.fee||0),0);
-  return {all,exps,priv,net,paid,share,contrib,kittyCash,dups,reimbDone,reimbPending,kittyBal:kittyIn-kittySpent+kittyXfer,transfers,wallet,kittyIn,kittySpent,total,me,myShare,privTotal,fees};
+  return {all,exps,priv,net,paid,share,contrib,kittyCash,dups,reimbDone,reimbPending,kittyBal:kittyIn-kittySpent+kittyXfer,transfers,wallet,kittyIn,kittySpent,kInC,kOutC,total,me,myShare,privTotal,fees};
 }
 function dupFlags(list){
   const out=new Set(), last={};
@@ -1188,6 +1188,7 @@ function kittyFx(t,C){
 }
 const kittyBig=(t,C)=>{ const f=kittyFx(t,C); return f==null?ntdT(C.kittyBal):curT(Math.round(f),t.currency); };
 const kmT=(t,C,v)=>{ const f=kittyFx(t,C); return useLocal(t)&&f!=null&&C.kittyBal>0.5?curT(Math.round(f*v/C.kittyBal),t.currency):mT(t,v); };
+const cmapFx=(t,m,twd)=>{ const fc=t.currency, r=dispRate(t); if(!r||!m) return ntdT(twd); let v=0; for(const [c,a] of Object.entries(m)){ if(c===fc) v+=a; else if(c==="TWD") v+=a/r; else { const cr=S.rates?.rates?.[c]; const ct=cr?(cr[3]||cr[1]):0; v+=ct?a*ct/r:0; } } return curT(Math.round(v),fc); };
 const fxOf=(t,v)=>{ const r=dispRate(t); return r?curT(Math.round(v/r),t.currency):ntdT(v); };
 const kittySub=(t,C)=>kittyFx(t,C)==null?"":`約合 ${ntdT(C.kittyBal)}`;
 function kittyMain(t,C){
@@ -1701,7 +1702,7 @@ function tripView(t){
   ${S.tab==="plan"||S.tab==="stat"?"":`${!t.settled&&t.kitty?.enabled&&C.kittyBal<-0.5?`<div class="banner">${ic("kitty")}<span class="grow">公費透支 ${(()=>{ const f=kittyFx(t,C); return f==null?ntdT(-C.kittyBal):curT(Math.round(-f),t.currency); })()}，大家要先繳交公費，分帳才會正確。</span>${RO()?"":`<button class="lnk" id="kShortBtn">繳交公費</button>`}</div>`:""}
   ${!t.settled&&t.end&&today()>t.end&&C.exps.length?`<div class="banner g">${ic("spark")}<span class="grow">旅程結束了，看看這趟花了多少、去了哪裡</span><button class="lnk" id="reviewTop">旅程回顧</button></div>`:""}
   ${joinTip(t)}
-  ${S.tab!=="list"?tabTitle()+heroMini(t,C):heroCard(t,C,budget,daily,todayMine)}`}
+  ${S.tab!=="list"?tabTitle():heroCard(t,C,budget,daily,todayMine)}`}
   ${S.tab==="list"?todayCard(t):""}
   <div class="stickybar" id="stickybar">
     ${(()=>{ const u=C.me&&unitOfMember(t,C.me); const ours=u&&u.members.length>1; const mine=C.me?(ours?u.members.reduce((a,id)=>a+(C.share[id]||0),0)+C.privTotal:C.myShare+C.privTotal):C.total; const f=C.me?fxMine(t,C,ours?u.members:[C.me],null):fsum;
@@ -1979,7 +1980,7 @@ function reviewSheet(t){
       <div class="c"><div class="k">最大一筆</div><div class="v num">${R.topOne.cur!=="TWD"?curT(R.topOne.amount,R.topOne.cur):ntdT(finalTWD(R.topOne))}</div><div class="s">${esc(R.topOne.title||catOf(t,R.topOne.cat).name)}</div></div>
       <div class="c"><div class="k">最常買單</div><div class="v">${esc(nameOf(t,R.topPayer[0]))}</div><div class="s">${R.topPayer[1]} 次</div></div>
       <div class="c"><div class="k">刷卡比例</div><div class="v num">${Math.round(R.card/tot*100)}%</div><div class="s">手續費 ${ntdT(C.fees)}</div></div>
-      <div class="c"><div class="k">${t.kitty?.enabled?"公費結餘":"花費最多"}</div><div class="v num">${t.kitty?.enabled?kittyBig(t,C):esc(catOf(t,R.cats[0][0]).name)}</div><div class="s">${t.kitty?.enabled?`已收 ${fxOf(t,C.kittyIn)}`:`${Math.round(R.cats[0][1]/tot*100)}%`}</div></div>
+      <div class="c"><div class="k">${t.kitty?.enabled?"公費結餘":"花費最多"}</div><div class="v num">${t.kitty?.enabled?kittyBig(t,C):esc(catOf(t,R.cats[0][0]).name)}</div><div class="s">${t.kitty?.enabled?`已收 ${cmapFx(t,C.kInC,C.kittyIn)}`:`${Math.round(R.cats[0][1]/tot*100)}%`}</div></div>
     </div>
     ${R.pts.length>1?`<div class="eyebrow">走過的路線・${R.places} 個地點</div><div class="sec" style="padding:8px">${routeSvg(R.pts)}</div>`:""}
     <div class="eyebrow">分類</div><div class="sec tight">${R.cats.map(([k,v])=>{const c=catOf(t,k);return `<div style="padding:11px 0;border-bottom:1px solid var(--line2)"><div class="row"><span class="ic sm">${ic(c.icon)}</span><span class="grow">${esc(c.name)}</span><b class="num" style="font-weight:600">${ntdT(v)}</b><span class="tiny num" style="width:38px;text-align:right">${Math.round(v/tot*100)}%</span></div><div class="statbar"><i style="width:${v/tot*100}%"></i></div></div>`}).join("")}</div>
@@ -2364,7 +2365,7 @@ function walletTab(t,C){
         ${(ps.length>1||(ps.length===1&&ps[0].c!==t.currency))&&ps.every(p=>p.v>0)?`<div class="tiny num" style="margin-top:4px">手上現金：${ps.map(p=>curT(p.v,p.c)).join("、")}</div>`:""}</div>
         <div style="text-align:right"><div class="tiny">保管人</div><div class="row" style="gap:6px;margin-top:4px;justify-content:flex-end">${av(t,k.keeper)}<b style="font-weight:500">${esc(nameOf(t,k.keeper))}</b></div></div></div>
       ${C.kittyIn?`<div class="meter ${ratio<.15?"low":""}" style="margin-top:14px"><i style="width:${Math.max(0,Math.min(100,ratio*100))}%"></i></div>
-      <div class="wline"><span>已收 ${fxOf(t,C.kittyIn)}</span><span>已支出 ${fxOf(t,C.kittySpent)}</span></div>`:`<div class="tiny" style="margin-top:10px">還沒有人繳交公費</div>`}
+      <div class="wline"><span>已收 ${cmapFx(t,C.kInC,C.kittyIn)}</span><span>已支出 ${cmapFx(t,C.kOutC,C.kittySpent)}</span></div>`:`<div class="tiny" style="margin-top:10px">還沒有人繳交公費</div>`}
       <div class="row" style="margin-top:18px"><b class="grow" style="font-size:14px">繳交狀況</b><span class="tiny">${paidN} / ${(t.members||[]).length} 人已繳</span></div>
       <div>${(t.members||[]).map(m=>{const o=kitBy[m.id]; return `<div class="krow">${av(t,m.id)}<span class="grow">${esc(m.name)}</span>
         ${o?`<div class="amt"><b class="num">${Object.entries(o.cur).map(([c,v])=>curT(v,c)).join("、")}</b><span class="tiny num">${Object.keys(o.cur).some(c=>c!=="TWD")?ntdT(o.twd)+"・":""}${o.n} 筆</span></div>`:`<span class="tiny">尚未繳交</span>`}</div>`}).join("")}</div>
