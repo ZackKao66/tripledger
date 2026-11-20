@@ -716,7 +716,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.20-dv";
+const APP_VER = "2026.11.20-dw";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2317,7 +2317,7 @@ function walletTab(t,C){
       <div class="row"><div class="grow"><div class="tiny">公費餘額</div>
         <div class="kbig num" style="${C.kittyBal<-0.5?"color:var(--red)":""}">${ps.length||C.kittyIn?kittyBig(t,C):"—"}</div>
         ${kittySub(t,C)&&(ps.length||C.kittyIn)?`<div class="tiny num">${kittySub(t,C)}</div>`:""}
-        ${ps.length>1||(ps.length===1&&ps[0].c!==t.currency)?`<div class="tiny num" style="margin-top:4px">手上現金：${ps.map(p=>curT(p.v,p.c)).join("、")}</div>`:""}</div>
+        ${(ps.length>1||(ps.length===1&&ps[0].c!==t.currency))&&ps.every(p=>p.v>0)?`<div class="tiny num" style="margin-top:4px">手上現金：${ps.map(p=>curT(p.v,p.c)).join("、")}</div>`:""}</div>
         <div style="text-align:right"><div class="tiny">保管人</div><div class="row" style="gap:6px;margin-top:4px;justify-content:flex-end">${av(t,k.keeper)}<b style="font-weight:500">${esc(nameOf(t,k.keeper))}</b></div></div></div>
       ${C.kittyIn?`<div class="meter ${ratio<.15?"low":""}" style="margin-top:14px"><i style="width:${Math.max(0,Math.min(100,ratio*100))}%"></i></div>
       <div class="wline"><span>已收 ${fxOf(t,C.kittyIn)}</span><span>已支出 ${fxOf(t,C.kittySpent)}</span></div>`:`<div class="tiny" style="margin-top:10px">還沒有人繳交公費</div>`}
@@ -3527,7 +3527,7 @@ function bindTrip(t){
   $("#jtX")&&($("#jtX").onclick=()=>{ try{localStorage.setItem("tripsplit_jt_"+t.id,"1")}catch(_){} render(); });
   $("#jtAdd")&&($("#jtAdd").onclick=()=>$("#addExp")?.click());
   $("#jtSplit")&&($("#jtSplit").onclick=()=>goTab("split",{drill:true}));
-  $("#stPend")&&($("#stPend").onclick=()=>goTab("wallet",{drill:true,to:"#kittySec"}));
+  $("#stPend")&&($("#stPend").onclick=()=>goTab("wallet",{drill:true}));
   $("#reviewBtn")&&($("#reviewBtn").onclick=()=>reviewSheet(t));
   $("#mapBtn")&&($("#mapBtn").onclick=()=>mapSheet(t));
   $$("[data-sc2]").forEach(b=>b.onclick=()=>{ S.lscope=b.dataset.sc2; render(); });
@@ -3538,7 +3538,7 @@ function bindTrip(t){
   $("#tcPlan")&&($("#tcPlan").onclick=()=>{ S.planDay=today(); goTab("plan",{drill:true}); });
   $$("[data-pexp]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const p=(S.plan||{})[b.dataset.pexp]; if(p) expFromPlan(t,p); });
   if(S.tab==="plan") bindPlan(t); else stopWalk();
-  $("#kstrip")&&($("#kstrip").onclick=()=>goTab("wallet",{drill:true,to:"#kittySec"}));
+  $("#kstrip")&&($("#kstrip").onclick=()=>goTab("wallet",{drill:true}));
   $("#gear")&&($("#gear").onclick=()=>{ if(S.tab==="set") navBack(); else goTab("set",{drill:true}); });
   $("#feedBtn")&&($("#feedBtn").onclick=()=>{feedSheet(t); S.feedHidden[t.id]=true; S.seenPrev[t.id]=Date.now(); render();});
   $("#feedAll")&&($("#feedAll").onclick=()=>feedSheet(t));
