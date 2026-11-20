@@ -341,13 +341,13 @@ textarea.inp{min-height:150px;font-size:14px;line-height:1.6}
 .scard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin:0 0 12px}
 .scard .sk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}.scard .sk .i{width:15px;height:15px}
 .sbig{font-size:34px;font-weight:700;letter-spacing:-.5px;margin:4px 0 10px;color:var(--ink)}.ssub{font-size:13px;color:var(--sub);margin-top:-6px}
-.ssplit{display:flex;gap:3px;height:10px;border-radius:5px;overflow:hidden}.ssplit i{display:block;min-width:4px}.ssplit .sh{background:var(--ink)}.ssplit .pv{background:#D4537E}
+.ssplit{display:flex;gap:3px;height:10px;border-radius:5px;overflow:hidden}.ssplit i{display:block;min-width:4px}.ssplit .sh{background:var(--ink)}.ssplit .pv{background:#b9b7af}
 .ssub+.ssplit,.ssub+.slg{margin-top:12px}
 .sv2{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;flex:none}.sv2 b{color:var(--ink);font-weight:700}.sv2 small{font-size:12px;color:var(--sub);font-weight:400}
-.slg2{margin-top:12px;display:grid;gap:8px}.slg2>div{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2)}.slg2 .i{width:15px;height:15px;flex:none}.slg2>div:first-child .i{color:var(--ink)}.slg2>div:last-child .i{color:#D4537E}
+.slg2{margin-top:12px;display:grid;gap:8px}.slg2>div{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2)}.slg2 .i{width:15px;height:15px;flex:none}.slg2>div:first-child .i{color:var(--ink)}.slg2>div:last-child .i{color:var(--sub)}
 .slg2 .sv{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25}.slg2 .sv b{color:var(--ink);font-size:15px}.slg2 .sv small{font-size:12px;color:var(--sub)}
 .slg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:13px;color:var(--ink2)}.slg span{display:inline-flex;align-items:center;gap:5px}.slg .i{width:14px;height:14px}
-.slg span:first-child .i{color:var(--ink)}.slg span:last-child .i{color:#D4537E}
+.slg span:first-child .i{color:var(--ink)}.slg span:last-child .i{color:var(--sub)}
 .sbud{margin-top:14px;padding-top:12px;border-top:1px solid var(--line2);font-size:13px;color:var(--sub)}.sbud b{color:var(--ink);font-size:14px}.sbud b.neg{color:#A32D2D}
 .sbar{height:6px;border-radius:3px;background:var(--line2);margin-top:8px;overflow:hidden}.sbar i{display:block;height:100%;background:var(--ink)}.sbar i.warn{background:#BA7517}.sbar i.over{background:#E24B4A}
 .scard.kit .sk .i{color:var(--sub)}.scard.kit .sbig{color:var(--ink)}
@@ -611,6 +611,12 @@ input,select,textarea,.inp,.inp.sm,.fbar .inp,.fpanel select,.cursel{font-size:1
 .top h2{font-size:17px;font-weight:700;letter-spacing:0}
 .bnav button.on{color:var(--ink)}
 .eyebrow{letter-spacing:0}
+
+.mono{background:var(--pri-soft)!important;background-image:none!important;color:var(--ink)!important}
+.bkchip{background:var(--pri-soft)!important;border-color:transparent!important}
+.scard.kit .slg2 .i{color:var(--sub)!important}
+.amt b{font-size:17px}
+.stickybar.on,.stickybar.show,.stickybar[data-on]{box-shadow:0 1px 0 var(--line)}
 </style>
 </head>
 <body>
@@ -716,7 +722,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.20-dw";
+const APP_VER = "2026.11.20-dx";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -1174,6 +1180,7 @@ function kittyFx(t,C){
   return v;
 }
 const kittyBig=(t,C)=>{ const f=kittyFx(t,C); return f==null?ntdT(C.kittyBal):curT(Math.round(f),t.currency); };
+const kmT=(t,C,v)=>{ const f=kittyFx(t,C); return useLocal(t)&&f!=null&&C.kittyBal>0.5?curT(Math.round(f*v/C.kittyBal),t.currency):mT(t,v); };
 const fxOf=(t,v)=>{ const r=dispRate(t); return r?curT(Math.round(v/r),t.currency):ntdT(v); };
 const kittySub=(t,C)=>kittyFx(t,C)==null?"":`約合 ${ntdT(C.kittyBal)}`;
 function kittyMain(t,C){
@@ -1584,9 +1591,9 @@ function homeView(){
       <div class="sec trip tcard" data-trip="${esc(t.id)}"><div class="trow">
         <div class="mono ${destOf(t)?"dest d-"+destOf(t):""}">${esc(t.iso)}</div>
         <div class="grow" style="min-width:0"><h3>${esc(t.name)}</h3>
-          <div class="meta-line">${esc(t.country)}${(t.cities||[]).length?`・${esc(t.cities.slice(0,3).join("、"))}${t.cities.length>3?" 等":""}`:""}<span class="dot"></span>${esc(t.currency)}<span class="dot"></span>${(t.members||[]).length} 人${t.kitty?.enabled?`<span class="pill g">公費${t.cacheKitty!=null?" "+ntdT(t.cacheKitty):""}</span>`:""}</div>
+          <div class="meta-line">${esc(t.country)}${(t.cities||[]).length?`・${esc(t.cities.slice(0,3).join("、"))}${t.cities.length>3?" 等":""}`:""}<span class="dot"></span>${esc(t.currency)}<span class="dot"></span>${(t.members||[]).length} 人${t.kitty?.enabled?`<span class="pill">公費${t.cacheKitty!=null?" "+(t.cacheKFx!=null&&t.currency!=="TWD"?curT(Math.round(t.cacheKFx),t.currency):ntdT(t.cacheKitty)):""}</span>`:""}</div>
           </div>
-        <div class="amt">${t.cacheTotal?ntd(t.cacheTotal):""}${t.settled?`<div class="tiny" style="text-align:right">已結清</div>`:""}</div></div>
+        <div class="amt">${t.cacheTotal?(t.cacheFx!=null&&t.currency!=="TWD"?`<b class="num">${curT(Math.round(t.cacheFx),t.currency)}</b><div class="tiny num" style="text-align:right">${ntdT(t.cacheTotal)}</div>`:ntd(t.cacheTotal)):""}${t.settled?`<div class="tiny" style="text-align:right">已結清</div>`:""}</div></div>
         ${tripDates(t)}
       </div>`).join("")).join(""):`
       <div class="empty"><div class="t">開始第一段旅程</div>選擇目的地後，幣別與匯率會自動帶入。<br>收到朋友的邀請連結？直接點開即可加入。
@@ -1689,7 +1696,8 @@ function tripView(t){
   ${S.tab!=="list"?tabTitle()+heroMini(t,C):heroCard(t,C,budget,daily,todayMine)}`}
   ${S.tab==="list"?todayCard(t):""}
   <div class="stickybar" id="stickybar">
-    <div class="compact"><span class="nm">${esc(t.name)}${t.kitty?.enabled?`<div class="tiny num" style="font-weight:400">公費 ${kittyBig(t,C)}</div>`:""}</span>${S.tab==="plan"?"":`<div class="am">${fsum!=null?`<b class="num">${curT(fsum,fc)}</b><div class="tiny num">${ntdT(C.total)}</div>`:`<b class="num">${ntdT(C.total)}</b>`}</div>`}</div>
+    ${(()=>{ const u=C.me&&unitOfMember(t,C.me); const ours=u&&u.members.length>1; const mine=C.me?(ours?u.members.reduce((a,id)=>a+(C.share[id]||0),0)+C.privTotal:C.myShare+C.privTotal):C.total; const f=C.me?fxMine(t,C,ours?u.members:[C.me],null):fsum;
+      return `<div class="compact"><span class="nm">${C.me?(ours?"我們這組花了":"我這趟花了"):"全團花了"}${t.kitty?.enabled?`<div class="tiny num" style="font-weight:400">公費 ${kittyBig(t,C)}</div>`:""}</span>${S.tab==="plan"?"":`<div class="am">${f!=null?`<b class="num">${curT(Math.round(f),fc)}</b><div class="tiny num">${ntdT(mine)}</div>`:`<b class="num">${ntdT(mine)}</b>`}</div>`}</div>`; })()}
   </div>
   <div class="wrap">${S.note?`<div class="note">${esc(S.note)}</div>`:""}${
     S.tab==="list"?listTab(t,C):S.tab==="split"?splitTab(t,C):S.tab==="wallet"?walletTab(t,C):S.tab==="stat"?statTab(t,C):S.tab==="plan"?planTab(t):setTab(t)}<div style="height:${S.tab==="plan"?0:76}px" aria-hidden="true"></div></div>
@@ -1815,7 +1823,7 @@ function listRows(t,C,rows){
       return `<div class="swipe">${RO()?"":`<div class="acts lft"><button class="cp" data-scp="${esc(e.id)}" data-p="${e.private?1:0}">${ic("copy")}複製</button></div><div class="acts"><button class="ed" data-sed="${esc(e.id)}" data-p="${e.private?1:0}">${ic("edit")}編輯</button><button class="dl" data-sdl="${esc(e.id)}" data-p="${e.private?1:0}">${ic("trash")}刪除</button></div>`}<div class="exp" data-exp="${esc(e.id)}" data-p="${e.private?1:0}">
         <div class="ic">${ic(c.icon)}</div>
         <div class="grow"><div class="n">${esc(e.title||c.name)}</div>
-          <div class="meta-line">${who}<span class="pill ${card?"w":""}">${METHODS[e.method]||"現金"}</span>${e.actualTWD!=null&&e.actualTWD!==""?'<span class="pill">已對帳</span>':""}${placePill(e)}${e.reimb&&e.payer!==KITTY?(e.reimb==="done"?'<span class="pill g">公費報銷</span>':'<span class="pill w">待公費報銷</span>'):""}${e.hasReceipt?'<span class="pill">收據</span>':""}${C.dups.has(e.id)?'<span class="pill w">可能重複</span>':""}</div></div>
+          <div class="meta-line">${who}<span class="pill">${METHODS[e.method]||"現金"}</span>${e.actualTWD!=null&&e.actualTWD!==""?'<span class="pill">已對帳</span>':""}${placePill(e)}${e.reimb&&e.payer!==KITTY?(e.reimb==="done"?'<span class="pill g">公費報銷</span>':'<span class="pill w">待公費報銷</span>'):""}${e.hasReceipt?'<span class="pill">收據</span>':""}${C.dups.has(e.id)?'<span class="pill w">可能重複</span>':""}</div></div>
         <div class="r">${e.cur!=="TWD"?`<b>${fmtCur(e.amount,e.cur)}</b><span class="tiny">${ntd(finalTWD(e))}</span>`:`<b>${ntd(finalTWD(e))}</b>`}</div>
       </div></div>`}).join("")}</div>`;
   }).join("");
@@ -2245,19 +2253,19 @@ function splitTab(t,C){
     ${unitRows!==null?unitRows:(t.members||[]).map(m=>{const n=C.net[m.id]||0;
       return `<div class="prow">${av(t,m.id)}<div class="grow"><div>${esc(m.name)}${m.id===me?'<span class="tiny">（我）</span>':""}</div><div class="tiny">付了 ${mH(t,(C.paid[m.id]||0)+(C.contrib[m.id]||0))}${C.contrib[m.id]?`（含公費 ${mH(t,C.contrib[m.id])}）`:""}<br>應付 ${mH(t,C.share[m.id]||0)}</div></div>
       ${netTag(n,t)}</div>`}).join("")}
-    ${t.kitty?.enabled?`<div class="prow">${av(t,KITTY)}<div class="grow"><div>公費</div><div class="tiny">保管人 ${esc(nameOf(t,t.kitty.keeper))}　結餘 ${mH(t,C.kittyBal)}</div></div>${netTag(C.net[KITTY],t)}</div>`:""}
+    ${t.kitty?.enabled?(()=>{ const n=Math.round(C.net[KITTY]||0); return `<div class="prow">${av(t,KITTY)}<div class="grow"><div>公費</div><div class="tiny">保管人 ${esc(nameOf(t,t.kitty.keeper))}　結餘 ${kittyBig(t,C)}</div></div>${n===0?`<div class="num tiny">已結清</div>`:`<div style="text-align:right;white-space:nowrap"><div class="num ${n>0?"pos":"neg"}">${n>0?"+":"−"}${kmT(t,C,Math.abs(n)).replace(/^NT\$ /,"")}</div>${useLocal(t)?`<div class="tiny num">${ntdT(Math.abs(n))}</div>`:""}</div>`}</div>`; })():""}
   </div>
   <div class="eyebrow">結算建議</div><div class="sec">
     <div class="sec-d" style="margin-bottom:4px">照這樣轉帳次數最少。付完按「已付款」，對方確認就完成。</div>
     ${!t.settled&&!s.length&&C.exps.length&&C.transfers.every(e=>e.confirmed)?`<div class="note g" style="margin-top:6px">所有款項都已結清。${isOwnerOf(t)?"封存後旅程會鎖定成唯讀，避免誤改；之後仍可重新開啟。":"等待旅程建立者封存旅程。"}</div>${isOwnerOf(t)&&!S.readOnly?`<button class="btn" id="archive" style="margin-top:12px">${ic("check")}封存旅程</button>`:""}`:""}
-    ${s.length?s.map(([a,b,x])=>`<div style="padding:14px 0;border-bottom:1px solid var(--line2)">
+    ${(S._psShown=0,"")}${s.length?s.map(([a,b,x])=>`<div style="padding:14px 0;border-bottom:1px solid var(--line2)">
       <div class="row" style="gap:8px;flex-wrap:wrap">${av(t,a)}<span>${esc(nameOf(t,a))}</span><span class="arrow">→</span>${av(t,b)}<span>${esc(nameOf(t,b))}</span></div>
-      <div class="row" style="margin-top:10px"><div class="grow"><b class="num" style="font-size:20px;font-weight:600">${mT(t,x)}</b>${useLocal(t)?`<span class="tiny num">　${ntdT(x)}</span>`:""}</div>
+      <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px"><div class="grow" style="min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px"><b class="num" style="font-size:20px;font-weight:600;white-space:nowrap">${a===KITTY||b===KITTY?kmT(t,C,x):mT(t,x)}</b>${useLocal(t)?`<span class="tiny num" style="white-space:nowrap">${ntdT(x)}</span>`:""}</div>
       ${RO()||t.settled||partyMembers(t,a).includes(me)?"":`<button class="btn xs line" data-remind="${esc(a)}|${esc(b)}|${x}" style="margin-right:6px">${ic("bell")}提醒</button>`}
       ${RO()?"":`<button class="btn xs line" data-pay="${esc(a)}|${esc(b)}|${x}">已付款</button>`}</div>
-      ${(()=>{ const p=partyPay(t,b); const amtS=useLocal(t)?`${mT(t,x)}（${ntdT(x)}）`:ntdT(x); return p?`<div class="payinfo"><div class="grow"><div class="tiny">${esc(p.name)} 的收款方式</div><div class="pi">${esc(p.info)}</div></div><button class="btn xs line" data-copy="${esc(p.info)}">複製帳號</button></div>
+      ${(()=>{ const p=partyPay(t,b); const amtS=useLocal(t)?`${a===KITTY||b===KITTY?kmT(t,C,x):mT(t,x)}（${ntdT(x)}）`:ntdT(x); return p?`<div class="payinfo"><div class="grow"><div class="tiny">${esc(p.name)} 的收款方式</div><div class="pi">${esc(p.info)}</div></div><button class="btn xs line" data-copy="${esc(p.info)}">複製帳號</button></div>
         ${partyMembers(t,a).includes(me)?`<button class="btn sm" data-copy="${esc(`轉帳給 ${p.name}：${amtS}\n${p.info}`)}" style="margin-top:8px">${ic("copy")}一鍵複製轉帳資訊</button><div class="tiny" style="margin-top:6px">複製後打開網銀或 LINE Pay 貼上，轉完回來按「已付款」</div>`:""}`
-        :(partyMembers(t,b).includes(me)&&!RO()?`<button class="lnk" data-paysetup style="margin-top:8px;font-size:13px">＋ 填寫我的收款方式，方便大家轉帳給你</button>`:""); })()}</div>`).join(""):`<div class="muted" style="padding:10px 0">款項已結清，無需轉帳</div>`}
+        :(partyMembers(t,b).includes(me)&&!RO()&&!(S._psShown++)?`<button class="lnk" data-paysetup style="margin-top:8px;font-size:13px">＋ 填寫我的收款方式，方便大家轉帳給你</button>`:""); })()}</div>`).join(""):`<div class="muted" style="padding:10px 0">款項已結清，無需轉帳</div>`}
   </div>
   ${C.transfers.length?`<div class="eyebrow">轉帳紀錄</div><div class="sec tight">
     ${C.transfers.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(e=>`<div class="prow">${av(t,e.fromP||e.from)}<span>${esc(nameOf(t,e.fromP||e.from))}</span><span class="arrow">→</span><span class="grow">${esc(nameOf(t,e.toP||e.to))}</span>
@@ -3046,7 +3054,7 @@ function planTab(t){
     <button class="pplay" id="pPlay">${ic("route")}<span>播放路線</span></button>
     <div class="pmtools"><button id="pMin" aria-label="${pmapMin()?"放大地圖":"縮小地圖"}">${ic(pmapMin()?"expand":"shrink")}</button><button id="pMapCfg" aria-label="地圖設定">${ic("gear")}</button></div></div>`:""}
   ${items.length?`    <div class="ptl" id="ptl">${rowsAll}</div>
-    ${RO()||items.length<2||lsGet("tripsplit_dragged")?"":`<div class="tiny" style="margin:8px 2px 0">按住右側 ☰ 上下拖曳可以調整順序</div>`}`
+    `
   :`<div class="empty" style="padding:30px 16px 8px"><div class="t">${day?"這天還沒有安排":"還沒有行程"}</div>新增景點、餐廳或交通，地圖上的小人會照順序帶你走一遍
     ${RO()?"":`<div class="row" style="gap:8px;margin-top:16px">${aiOK()?`<button class="btn aibtn" id="pAI" style="flex:1">${ic("spark")}AI 幫我排</button>`:""}<button class="btn line" id="pAdd" style="flex:1">${ic("plus")}手動新增</button></div>`}</div>`}
   <div style="height:70px"></div>
@@ -3499,8 +3507,8 @@ function setTab(t){
     <label class="l">自訂項目</label>
     <div>${(t.customCats||[]).map(c=>`<span class="chip">${ic(c.icon)}${esc(c.name)}${RO()?"":`<button data-delc="${esc(c.id)}" style="margin-left:2px;color:var(--sub);display:grid" aria-label="刪除">${ic("x")}</button>`}</span>`).join("")}
     ${RO()?"":`<button class="chip add" id="addCatSet">${ic("plus")}新增項目</button>`}</div>`)}
-  ${sec("look","外觀",`${(t.theme||"auto")==="classic"?"經典黑":`${esc(t.country)}國旗配色`}・${THEME_N[getTheme()]}`,`
-    <div class="themepick" style="grid-template-columns:1fr 1fr">${[["auto",`${esc(t.country)}國旗配色`,FLAG[t.iso]?"sw-"+t.iso:"sw-classic"],["classic","經典黑","sw-classic"]].map(([k,n,sw])=>`<button data-th="${k}" class="${((t.theme||"auto")==="classic"?"classic":"auto")===k?"on":""}" ${ro}><div class="sw ${sw}"></div><span>${n}</span></button>`).join("")}</div>
+  ${sec("look","外觀",`${(t.theme||"auto")==="classic"?"不顯示國家色":`${esc(t.country)}國家色點`}・${THEME_N[getTheme()]}`,`
+    <div class="themepick" style="grid-template-columns:1fr 1fr">${[["auto",`${esc(t.country)}國家色點`,FLAG[t.iso]?"sw-"+t.iso:"sw-classic"],["classic","不顯示國家色","sw-classic"]].map(([k,n,sw])=>`<button data-th="${k}" class="${((t.theme||"auto")==="classic"?"classic":"auto")===k?"on":""}" ${ro}><div class="sw ${sw}"></div><span>${n}</span></button>`).join("")}</div>
     <div class="row" style="margin-top:14px"><span class="grow">深色模式：${THEME_N[getTheme()]}</span><button class="btn sm line" id="themeBtn2">${ic("moon")}切換</button></div>`)}
   <div class="setg">${ic("download")}資料</div>
   ${sec("data","匯率與備份",`臺銀牌告 ${esc(S.rates.updatedAt)}`,`
@@ -3674,8 +3682,10 @@ async function enableKitty(t){
 }
 async function cacheTotal(t){
   const C=compute(t); const total=Math.round(C.total); const kb=t.kitty?.enabled?Math.round(C.kittyBal):null;
-  if(RO() || needsClaim(t) || (t.cacheTotal===total && (t.cacheKitty??null)===kb)) return;
-  try{await Store.saveTrip({...S.trips[t.id]||t,cacheTotal:total,cacheKitty:kb})}catch(e){}
+  const fc=t.currency, r=dispRate(t); const fx=fc!=="TWD"&&r?Math.round(C.exps.reduce((a,e)=>a+(e.cur===fc?Number(e.amount)||0:finalTWD(e)/r),0)):null;
+  const kfx=t.kitty?.enabled&&kittyFx(t,C)!=null?Math.round(kittyFx(t,C)):null;
+  if(RO() || needsClaim(t) || (t.cacheTotal===total && (t.cacheKitty??null)===kb && (t.cacheFx??null)===fx && (t.cacheKFx??null)===kfx)) return;
+  try{await Store.saveTrip({...S.trips[t.id]||t,cacheTotal:total,cacheKitty:kb,cacheFx:fx,cacheKFx:kfx})}catch(e){}
 }
 async function copyText(txt,what="內容"){
   try{await navigator.clipboard.writeText(txt); toast(`已複製${what}`)}
