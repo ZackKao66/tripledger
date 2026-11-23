@@ -744,7 +744,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.23-fs";
+const APP_VER = "2026.11.23-fs2";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2947,28 +2947,55 @@ function flightScanPick(t,back){
   };
   inp.click();
 }
+const FS_REQ=[["no","航班號碼"],["date","日期"],["dep","出發機場"],["depT","起飛時間"],["arr","抵達機場"],["arrT","抵達時間"]];
+const fsMiss=f=>FS_REQ.filter(([k])=>!f[k]).map(([k])=>k);
 function flightScanReview(t,list,code,back){
-  const fmtD=d=>d?`${d.slice(5).replace("-","/")}（${WD[new Date(d+"T00:00").getDay()]}）`:"日期未讀到";
+  const fmtD=d=>d?`${d.slice(5).replace("-","/")}（${WD[new Date(d+"T00:00").getDay()]}）`:"";
   const ds=planDays(t).filter(Boolean), out=d=>d&&ds.length&&(d<addDays(ds[0],-1)||d>addDays(ds[ds.length-1],1));
   if(!list.length){ openSheet(`<h3>截圖上找不到航班</h3><div class="sec-d">請換一張有「航班號碼、日期、起降時間」的訂單或電子機票截圖，或手動輸入。</div>
     <button class="btn" id="fsMan" style="margin-top:16px">手動輸入</button><button class="btn line" id="fsBack" style="margin-top:10px">返回</button>`);
     $("#fsMan").onclick=()=>flightSheet(t,null,back); $("#fsBack").onclick=()=>back?back():closeSheet(); return; }
-  openSheet(`<h3>讀到 ${list.length} 個航班</h3><div class="sec-d">請對照截圖確認，勾選要加入的航班。加入後還可以點進去修改。</div>
-    <div class="sec tight">${list.map((f,i)=>`<label class="prow" style="cursor:pointer;align-items:flex-start"><input type="checkbox" data-fs="${i}" checked style="margin-top:4px">
-      <div class="grow" style="min-width:0"><div style="font-weight:600">${esc(f.no||"航班")}<span class="tiny num" style="font-weight:400;margin-left:8px">${fmtD(f.date)}</span></div>
-      <div class="tiny num">${fltLine(f)}</div>${f.depTerm||f.arrTerm?`<div class="tiny num">${esc([f.depTerm?`${f.dep} ${f.depTerm}`:"",f.arrTerm?`${f.arr} ${f.arrTerm}`:""].filter(Boolean).join(" → "))}</div>`:""}
-      ${out(f.date)?`<div class="tiny" style="color:var(--warm)">不在這趟旅程的日期內，請確認</div>`:""}</div></label>`).join("")}</div>
-    ${code?`<div class="tiny" style="margin-top:8px">訂位代號：<b class="num">${esc(code)}</b>（會一起存到勾選的航班）</div>`:""}
+  list=list.map(f=>({...f})); const miss0=list.map(fsMiss);
+  const inpFor=(i,k)=>{ const lb=FS_REQ.find(x=>x[0]===k)[1];
+    const W='width:100%;min-width:0;box-sizing:border-box';
+    const el=k==="date"?`<input class="inp num" type="date" style="${W}" data-fi="${i}" data-fk="${k}" value="${esc(ds[0]||"")}" data-empty="1">`
+      :/T$/.test(k)?`<input class="inp num" type="time" style="${W}" data-fi="${i}" data-fk="${k}">`
+      :`<input class="inp num" data-fi="${i}" data-fk="${k}" maxlength="${k==="no"?8:3}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${k==="no"?"例如 BR198":"例如 TPE"}" style="${W};text-transform:uppercase">`;
+    return `<div style="min-width:0"><div class="tiny" style="margin:6px 0 4px">${lb}</div>${el}</div>`; };
+  const nOK=miss0.filter(m=>!m.length).length, nBad=list.length-nOK;
+  openSheet(`<h3>讀到 ${list.length} 個航班</h3><div class="sec-d">請對照截圖確認，勾選要加入的航班。${nBad?`<b style="color:var(--warm)">有 ${nBad} 班資料不完整</b>，補齊後才會自動勾選。`:"加入後還可以點進去修改。"}</div>
+    <div class="sec tight">${list.map((f,i)=>{ const m=miss0[i]; return `<div class="prow" style="align-items:flex-start;flex-wrap:nowrap">
+      <input type="checkbox" data-fs="${i}" ${m.length?"":"checked"} style="margin-top:4px;width:20px;height:20px;flex:none">
+      <div class="grow" style="min-width:0;flex:1 1 0"><div style="font-weight:600">${esc(f.no||"（未讀到航班號碼）")}<span class="tiny num" style="font-weight:400;margin-left:8px">${fmtD(f.date)}</span></div>
+      ${f.airline?`<div class="tiny">${esc(f.airline)}</div>`:""}
+      ${f.dep||f.arr||f.depT||f.arrT?`<div class="tiny num">${esc(f.dep||"？")}${f.depT?" "+esc(f.depT):""} → ${esc(f.arr||"？")}${f.arrT?" "+esc(f.arrT):""}${f.arrNext?"（+1）":""}</div>`:""}
+      ${f.depTerm||f.arrTerm?`<div class="tiny num">${esc([f.depTerm?`${f.dep||""} ${f.depTerm}`:"",f.arrTerm?`${f.arr||""} ${f.arrTerm}`:""].filter(Boolean).join(" → "))}</div>`:""}
+      ${f.code&&f.code!==code?`<div class="tiny num">訂位代號 ${esc(f.code)}</div>`:""}
+      ${out(f.date)?`<div class="tiny" style="color:var(--warm)">不在這趟旅程的日期內，請確認</div>`:""}
+      ${m.length?`<div class="tiny" data-fmsg="${i}" style="color:var(--warm);margin-top:4px;white-space:normal">截圖上看不到：${m.map(k=>FS_REQ.find(x=>x[0]===k)[1]).join("、")}，請補上</div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 8px">${m.map(k=>inpFor(i,k)).join("")}</div>`:""}
+      </div></div>`; }).join("")}</div>
+    ${code?`<div class="tiny" style="margin-top:8px">訂位代號：<b class="num">${esc(code)}</b>（會存到勾選的航班）</div>`:""}
     <button class="btn" id="fsAdd" style="margin-top:18px">加入勾選的航班</button>
     <button class="btn line" id="fsBack" style="margin-top:10px">返回</button>`);
+  const val=(i,k)=>{ const e=document.querySelector(`[data-fi="${i}"][data-fk="${k}"]`); if(!e) return list[i][k]||"";
+    let v=(e.value||"").trim(); if(k==="no") v=v.toUpperCase().replace(/[^A-Z0-9]/g,""); if(k==="dep"||k==="arr") v=/^[A-Za-z]{3}$/.test(v)?v.toUpperCase():"";
+    if(k==="date"&&e.dataset.empty&&!e.dataset.touched) v=""; return v; };
+  const missNow=i=>miss0[i].filter(k=>!val(i,k));
+  const upd=i=>{ const left=missNow(i), cb=document.querySelector(`[data-fs="${i}"]`), msg=document.querySelector(`[data-fmsg="${i}"]`);
+    if(!left.length){ cb.checked=true; if(msg){ msg.style.color="var(--ok)"; msg.textContent="已補齊"; } }
+    else if(msg){ msg.style.color="var(--warm)"; msg.textContent=`還缺：${left.map(k=>FS_REQ.find(x=>x[0]===k)[1]).join("、")}`; } };
+  $$("[data-fi]").forEach(e=>{ const h=()=>{ e.dataset.touched="1"; upd(+e.dataset.fi); }; e.oninput=h; e.onchange=h; });
   $("#fsBack").onclick=()=>back?back():closeSheet();
   $("#fsAdd").onclick=lock(async()=>{
-    const pick=[...$$("[data-fs]")].filter(x=>x.checked).map(x=>list[+x.dataset.fs]); if(!pick.length){ toast("請至少勾選一個航班"); return; }
-    const cur=S.trips[t.id]||t; let fl=[...(cur.flights||[])];
+    const idx=[...$$("[data-fs]")].filter(x=>x.checked).map(x=>+x.dataset.fs); if(!idx.length){ toast("請至少勾選一個航班"); return; }
+    const bad=idx.filter(i=>missNow(i).length);
+    if(bad.length){ bad.forEach(upd); const e=document.querySelector(`[data-fmsg="${bad[0]}"]`); e&&e.scrollIntoView({behavior:"smooth",block:"center"}); haptic(); toast("有航班資料還沒補齊，請補上或取消勾選"); return; }
+    const cur=S.trips[t.id]||t; let fl=[...(cur.flights||[])]; const pick=idx.map(i=>{ const f={...list[i]}; miss0[i].forEach(k=>f[k]=val(i,k)); return f; });
     for(const f of pick){ const date=f.date||ds[0]||today(), ex=fl.find(y=>f.no&&y.no===f.no&&y.date===date);
       const nf={id:ex?.id||uid(),no:f.no,date,dep:f.dep,depT:f.depT,arr:f.arr,arrT:f.arrT,arrNext:!!f.arrNext,
         term:[f.depTerm?`${f.dep} ${f.depTerm}`:"",f.arrTerm?`${f.arr} ${f.arrTerm}`:""].filter(Boolean).join("　→　")||ex?.term||"",
-        code:code||ex?.code||"",note:ex?.note||f.airline||""};
+        code:f.code||code||ex?.code||"",note:ex?.note||f.airline||""};
       fl=[...fl.filter(y=>y.id!==nf.id),nf]; }
     try{ await Store.saveTrip({...cur,flights:fl}); S.trips={...S.trips,[t.id]:{...cur,flights:fl}}; toast(`已加入 ${pick.length} 個航班`); render(); back?back():closeSheet();
       planNotify(t,`新增了航班：${pick.map(f=>f.no).filter(Boolean).join("、")}`); }catch(e){}

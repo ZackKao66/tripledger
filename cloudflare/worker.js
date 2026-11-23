@@ -361,10 +361,13 @@ async function flightScan(b, uid, env, origin) {
   const used = +(await env.PUSH.get(rk) || 0); if (used >= 30) return json({ error: "limit", detail: "今天的截圖辨識次數已用完，明天再試" }, 429, origin);
   await env.PUSH.put(rk, String(used + 1), { expirationTtl: 90000 });
   const yr = b.year && /^\d{4}$/.test(String(b.year)) ? String(b.year) : day.slice(0, 4);
-  const ask = `This image is a flight booking / e-ticket / itinerary screenshot (possibly in Chinese or Japanese).
-Read ONLY what is printed in the image. Do NOT guess or use outside knowledge. If a field is not visible, use "".
-List every flight segment shown (outbound and return). Return ONLY JSON:
-{"flights":[{"no":"flight number like IT230","date":"YYYY-MM-DD (if the year is not shown assume ${yr})","dep":"departure airport IATA code (3 letters; convert a printed city/airport name only if certain, e.g. 桃園→TPE, 那霸→OKA)","depT":"departure time HH:MM 24h","arr":"arrival airport IATA","arrT":"arrival time HH:MM 24h","arrNext":true|false,"depTerm":"departure terminal like T1","arrTerm":"arrival terminal","airline":"airline name as printed"}],"code":"booking reference / PNR / 訂單編號 if printed, else \"\""}
+  const ask = `This image is a flight booking / e-ticket / itinerary screenshot (possibly in Chinese, Japanese or English).
+Read ONLY what is printed in the image. NEVER guess or fill anything from outside knowledge.
+List every flight segment separately (outbound, return, and each leg of a connection; segments may be on different airlines).
+If a segment is cut off at the edge of the screenshot or a field is not legible, still list the segment but leave those fields "".
+Do not list the same segment twice (summary + detail views of one flight are one segment).
+Return ONLY JSON:
+{"flights":[{"no":"flight number like IT230","date":"YYYY-MM-DD departure date (if the year is not shown assume ${yr})","dep":"departure airport IATA code (3 letters; convert a printed city/airport name only if unambiguous, e.g. 桃園→TPE, 那霸→OKA)","depT":"departure time HH:MM 24h","arr":"arrival airport IATA","arrT":"arrival time HH:MM 24h","arrNext":true|false,"depTerm":"departure terminal like T1","arrTerm":"arrival terminal","airline":"airline name as printed","code":"booking reference / PNR for this segment if printed"}],"code":"booking reference / 訂單編號 shared by all segments if printed, else \"\""}
 If the image has no flight information return {"flights":[]}.`;
   const r = await gemini(env, { contents: [{ parts: [{ inline_data: { mime_type: mime, data: img } }, { text: ask }] }], generationConfig: { temperature: 0, maxOutputTokens: 1500, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }, AI_MODELS, 45000);
   if (!r.ok) return json({ error: "ai", detail: String(r.err || "").replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 160) }, 502, origin);
@@ -375,7 +378,9 @@ If the image has no flight information return {"flights":[]}.`;
   const fl = (Array.isArray(o?.flights) ? o.flights : []).slice(0, 8).map(f => ({
     no: String(f.no || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8), date: dt(f.date), dep: ap(f.dep), depT: tm(f.depT), arr: ap(f.arr), arrT: tm(f.arrT),
     arrNext: !!f.arrNext, depTerm: String(f.depTerm || "").slice(0, 12), arrTerm: String(f.arrTerm || "").slice(0, 12), airline: String(f.airline || "").slice(0, 30) }))
-    .filter(f => f.no || (f.dep && f.arr));
+    .map((f, i) => ({ ...f, code: String((Array.isArray(o?.flights) ? o.flights : [])[i]?.code || "").replace(/[^A-Za-z0-9\-]/g, "").slice(0, 20) }))
+    .filter(f => f.no || (f.dep && f.arr))
+    .filter((f, i, a) => !f.no || a.findIndex(y => y.no === f.no && y.date === f.date) === i);
   return json({ ok: true, flights: fl, code: String(o?.code || "").replace(/[^A-Za-z0-9\-]/g, "").slice(0, 20) }, 200, origin);
 }
 // 地點名稱辨識：中文俗稱、縮寫 → 當地正式名稱、英文名稱、地址、約略座標
