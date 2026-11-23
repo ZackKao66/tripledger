@@ -321,6 +321,37 @@ async function gemini(env, reqBody, models, ms = 30000) {
   }
   return { ok: false, err: lastErr };
 }
+// 航班 AI 帶入：航班號碼＋日期 → 起降機場、表定時間、航廈（先用 Google 搜尋查證，失敗才憑模型推測）
+async function flightAI(b, uid, env, origin) {
+  if (!env.GEMINI_KEY) return json({ error: "AI 未設定" }, 503, origin);
+  const no = String(b.no || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date || "") ? b.date : "";
+  if (!/^[A-Z0-9]{2}\d{1,4}[A-Z]?$/.test(no)) return json({ error: "bad", detail: "航班號碼格式像 BR198、IT200" }, 400, origin);
+  const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), rk = `fl:${uid}:${day}`;
+  const used = +(await env.PUSH.get(rk) || 0); if (used >= 30) return json({ error: "limit", detail: "今天的航班查詢次數已用完，明天再試" }, 429, origin);
+  const wd = date ? new Date(date + "T00:00:00Z").getUTCDay() : -1;
+  const ck = `flc:${no}:${wd}`; const hit = await env.PUSH.get(ck); if (hit) return json({ ok: true, cached: true, ...JSON.parse(hit) }, 200, origin);
+  await env.PUSH.put(rk, String(used + 1), { expirationTtl: 90000 });
+  const wdName = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][wd] || "";
+  const ask = `Flight ${no}${date ? ` on ${date} (${wdName})` : ""}. Find its regular scheduled route and times.
+Return ONLY a JSON object, no other text:
+{"found":true|false,"airline":"airline name in Traditional Chinese if commonly known, else English","dep":"departure airport IATA code","arr":"arrival airport IATA code","depT":"scheduled departure local time HH:MM (24h)","arrT":"scheduled arrival local time HH:MM (24h)","arrNext":true|false (arrives the next calendar day),"depTerm":"departure terminal like T2, empty if unknown","arrTerm":"arrival terminal, empty if unknown"}
+If the flight number does not exist or you are not reasonably sure of the route, return {"found":false}. Times must be local times at each airport.`;
+  const pick = t => { try { const m = String(t || "").match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch { return null; } };
+  let grounded = true;
+  let r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-2.5-flash", "gemini-flash-latest"], 30000);
+  let o = r.ok ? pick(r.text) : null;
+  if (!o) { grounded = false;
+    r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 500, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"], 25000);
+    o = r.ok ? pick(r.text) : null; }
+  if (!o) return json({ error: "ai", detail: (r.err || "AI 沒有回應").slice(0, 200) }, 502, origin);
+  const ap = x => /^[A-Z]{3}$/.test(String(x || "").toUpperCase()) ? String(x).toUpperCase() : "";
+  const tm = x => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x || "")); return m && +m[1] < 24 && +m[2] < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
+  const out = { found: !!o.found && !!(ap(o.dep) && ap(o.arr)), airline: String(o.airline || "").slice(0, 30), dep: ap(o.dep), arr: ap(o.arr), depT: tm(o.depT), arrT: tm(o.arrT), arrNext: !!o.arrNext,
+    depTerm: String(o.depTerm || "").slice(0, 12), arrTerm: String(o.arrTerm || "").slice(0, 12), grounded };
+  if (out.found) await env.PUSH.put(ck, JSON.stringify(out), { expirationTtl: 7 * 86400 });
+  return json({ ok: true, ...out }, 200, origin);
+}
 // 地點名稱辨識：中文俗稱、縮寫 → 當地正式名稱、英文名稱、地址、約略座標
 async function placeAI(b, uid, env, origin) {
   if (!env.GEMINI_KEY) return json({ error: "AI 未設定" }, 503, origin);
@@ -458,6 +489,7 @@ export default {
 
     if (path === "/ai-plan") return aiPlan(b, uid, env, origin);
     if (path === "/place-ai") return placeAI(b, uid, env, origin);
+    if (path === "/flight-ai") return flightAI(b, uid, env, origin);
     if (path === "/subscribe") {
       const s = b.sub;
       if (!s?.endpoint || !s?.keys?.p256dh || !s?.keys?.auth) return json({ error: "bad subscription" }, 400, origin);
