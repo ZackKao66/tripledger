@@ -295,7 +295,8 @@ function invitePage(u) {
 }
 
 // AI 排行程（Google Gemini）
-const AI_MODELS = ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"];
+// 2.5 版已不開放新帳號；優先用自動指向最新版的別名，再試新版號，2.5 只當最後備援
+const AI_MODELS = ["gemini-flash-latest", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-2.5-flash"];
 const AI_DAILY = 20;
 async function gemini(env, reqBody, models, ms = 30000) {
   let lastErr = "";
@@ -339,10 +340,10 @@ Return ONLY a JSON object, no other text:
 If the flight number does not exist or you are not reasonably sure of the route, return {"found":false}. Times must be local times at each airport.`;
   const pick = t => { try { const m = String(t || "").match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch { return null; } };
   let grounded = true;
-  let r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-2.5-flash", "gemini-flash-latest"], 30000);
+  let r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-flash-latest", "gemini-3.6-flash"], 30000);
   let o = r.ok ? pick(r.text) : null;
   if (!o) { grounded = false;
-    r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 500, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"], 25000);
+    r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 500, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }, AI_MODELS, 25000);
     o = r.ok ? pick(r.text) : null; }
   if (!o) return json({ error: "ai", detail: (r.err || "AI 沒有回應").slice(0, 200) }, 502, origin);
   const ap = x => /^[A-Z]{3}$/.test(String(x || "").toUpperCase()) ? String(x).toUpperCase() : "";
@@ -366,7 +367,7 @@ async function placeAI(b, uid, env, origin) {
 請回傳最可能的 1 到 3 個候選，最可能的放第一個。只回傳真實存在的地點；完全無法判斷就回傳空陣列。
 name_zh：台灣旅客熟悉的中文名稱；name_local：當地語言正式名稱；name_en：英文正式名稱；address：當地地址（英文或當地語言）；lat/lng：你所知的座標（盡量準確）；kind：hotel/sight/food/shop/transit/other。`;
   const schema = { type: "OBJECT", properties: { places: { type: "ARRAY", items: { type: "OBJECT", properties: { name_zh: { type: "STRING" }, name_local: { type: "STRING" }, name_en: { type: "STRING" }, address: { type: "STRING" }, lat: { type: "NUMBER" }, lng: { type: "NUMBER" }, kind: { type: "STRING" } }, required: ["name_zh", "name_en", "lat", "lng"] } } }, required: ["places"] };
-  const r = await gemini(env, { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json", responseSchema: schema, thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest"], 25000);
+  const r = await gemini(env, { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json", responseSchema: schema, thinkingConfig: { thinkingBudget: 0 } } }, AI_MODELS, 25000);
   if (!r.ok) return json({ error: "AI 暫時無法回應", detail: r.err }, 502, origin);
   let out; try { out = JSON.parse(r.text); } catch (e) { return json({ error: "AI 回應格式錯誤" }, 502, origin); }
   const places = (out.places || []).filter(p => isFinite(p.lat) && isFinite(p.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180).slice(0, 3);
@@ -466,7 +467,7 @@ export default {
     if (req.method === "GET" && path === "/ai-test") {
       // 診斷：逐一測試每個模型能不能回應（不會顯示金鑰）
       const out = { relay: !!env.GEMINI_RELAY, key: !!env.GEMINI_KEY, colo: req.cf && req.cf.colo, models: [] };
-      for (const m of ["gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest"]) {
+      for (const m of ["gemini-flash-latest", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-2.5-flash"]) {
         const t0 = Date.now(); const r = await gemini(env, { contents: [{ role: "user", parts: [{ text: "只回答 OK" }] }], generationConfig: { maxOutputTokens: 20 } }, [m], 30000);
         out.models.push({ model: m, ok: r.ok, secs: ((Date.now() - t0) / 1000).toFixed(1), reply: r.ok ? r.text.slice(0, 20) : undefined, error: r.ok ? undefined : String(r.err).replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 300) });
       }
@@ -479,8 +480,10 @@ export default {
       const out = { relay: !!env.GEMINI_RELAY, tests: [] };
       for (const [name, body] of [["google_search", { contents: [{ parts: [{ text: ask }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 400 } }],
                                   ["plain_json", { contents: [{ parts: [{ text: ask }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 300, responseMimeType: "application/json" } }]]) {
-        const t0 = Date.now(); const r = await gemini(env, body, ["gemini-2.5-flash"], 30000);
-        out.tests.push({ name, ok: r.ok, secs: ((Date.now() - t0) / 1000).toFixed(1), reply: r.ok ? r.text.slice(0, 300) : undefined, error: r.ok ? undefined : String(r.err).replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 400) });
+        for (const m of ["gemini-flash-latest", "gemini-3.6-flash", "gemini-flash-lite-latest"]) {
+        const t0 = Date.now(); const r = await gemini(env, body, [m], 30000);
+        out.tests.push({ name: name + " / " + m, ok: r.ok, secs: ((Date.now() - t0) / 1000).toFixed(1), reply: r.ok ? r.text.slice(0, 300) : undefined, error: r.ok ? undefined : String(r.err).replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 300) });
+        }
       }
       return new Response(JSON.stringify(out, null, 1), { headers: { "content-type": "application/json; charset=utf-8" } });
     }
