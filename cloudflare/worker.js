@@ -351,6 +351,33 @@ If the flight number does not exist or you are not reasonably sure of the route,
   if (out.found) await env.PUSH.put(ck, JSON.stringify(out), { expirationTtl: 7 * 86400 });
   return json({ ok: true, ...out }, 200, origin);
 }
+// 訂單截圖帶入：讀圖上的航班資料（是「讀」不是「猜」），可一次多班（去程＋回程）
+async function flightScan(b, uid, env, origin) {
+  if (!env.GEMINI_KEY) return json({ error: "AI 未設定" }, 503, origin);
+  const img = String(b.img || ""), mime = /^image\/(jpeg|png|webp)$/.test(b.mime || "") ? b.mime : "image/jpeg";
+  if (!/^[A-Za-z0-9+/=]+$/.test(img) || img.length < 1000) return json({ error: "bad", detail: "圖片讀取失敗" }, 400, origin);
+  if (img.length > 2_800_000) return json({ error: "bad", detail: "圖片太大" }, 413, origin);
+  const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10), rk = `fs:${uid}:${day}`;
+  const used = +(await env.PUSH.get(rk) || 0); if (used >= 30) return json({ error: "limit", detail: "今天的截圖辨識次數已用完，明天再試" }, 429, origin);
+  await env.PUSH.put(rk, String(used + 1), { expirationTtl: 90000 });
+  const yr = b.year && /^\d{4}$/.test(String(b.year)) ? String(b.year) : day.slice(0, 4);
+  const ask = `This image is a flight booking / e-ticket / itinerary screenshot (possibly in Chinese or Japanese).
+Read ONLY what is printed in the image. Do NOT guess or use outside knowledge. If a field is not visible, use "".
+List every flight segment shown (outbound and return). Return ONLY JSON:
+{"flights":[{"no":"flight number like IT230","date":"YYYY-MM-DD (if the year is not shown assume ${yr})","dep":"departure airport IATA code (3 letters; convert a printed city/airport name only if certain, e.g. 桃園→TPE, 那霸→OKA)","depT":"departure time HH:MM 24h","arr":"arrival airport IATA","arrT":"arrival time HH:MM 24h","arrNext":true|false,"depTerm":"departure terminal like T1","arrTerm":"arrival terminal","airline":"airline name as printed"}],"code":"booking reference / PNR / 訂單編號 if printed, else \"\""}
+If the image has no flight information return {"flights":[]}.`;
+  const r = await gemini(env, { contents: [{ parts: [{ inline_data: { mime_type: mime, data: img } }, { text: ask }] }], generationConfig: { temperature: 0, maxOutputTokens: 1500, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }, AI_MODELS, 45000);
+  if (!r.ok) return json({ error: "ai", detail: String(r.err || "").replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 160) }, 502, origin);
+  let o = null; try { const m = String(r.text || "").match(/\{[\s\S]*\}/); o = m ? JSON.parse(m[0]) : null; } catch {}
+  const ap = x => /^[A-Z]{3}$/.test(String(x || "").toUpperCase()) ? String(x).toUpperCase() : "";
+  const tm = x => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x || "")); return m && +m[1] < 24 && +m[2] < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
+  const dt = x => /^\d{4}-\d{2}-\d{2}$/.test(String(x || "")) ? String(x) : "";
+  const fl = (Array.isArray(o?.flights) ? o.flights : []).slice(0, 8).map(f => ({
+    no: String(f.no || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8), date: dt(f.date), dep: ap(f.dep), depT: tm(f.depT), arr: ap(f.arr), arrT: tm(f.arrT),
+    arrNext: !!f.arrNext, depTerm: String(f.depTerm || "").slice(0, 12), arrTerm: String(f.arrTerm || "").slice(0, 12), airline: String(f.airline || "").slice(0, 30) }))
+    .filter(f => f.no || (f.dep && f.arr));
+  return json({ ok: true, flights: fl, code: String(o?.code || "").replace(/[^A-Za-z0-9\-]/g, "").slice(0, 20) }, 200, origin);
+}
 // 地點名稱辨識：中文俗稱、縮寫 → 當地正式名稱、英文名稱、地址、約略座標
 async function placeAI(b, uid, env, origin) {
   if (!env.GEMINI_KEY) return json({ error: "AI 未設定" }, 503, origin);
@@ -503,6 +530,7 @@ export default {
     if (path === "/ai-plan") return aiPlan(b, uid, env, origin);
     if (path === "/place-ai") return placeAI(b, uid, env, origin);
     if (path === "/flight-ai") return flightAI(b, uid, env, origin);
+    if (path === "/flight-scan") return flightScan(b, uid, env, origin);
     if (path === "/subscribe") {
       const s = b.sub;
       if (!s?.endpoint || !s?.keys?.p256dh || !s?.keys?.auth) return json({ error: "bad subscription" }, 400, origin);
