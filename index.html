@@ -744,7 +744,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.23-fb";
+const APP_VER = "2026.11.23-fc";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2950,11 +2950,11 @@ function flightSheet(t,old,back){
     if(!/^[A-Z0-9]{2}\d{1,4}[A-Z]?$/.test(no)){ msg.style.color="var(--red)"; msg.textContent="先輸入航班號碼，例如 BR198、IT200"; return; }
     msg.style.color=""; msg.textContent="查詢中，約 5–15 秒…";
     try{ const r=await pushPost("/flight-ai",{no,date:$("#fDate").value});
-      if(!r.found){ msg.style.color="var(--warm)"; msg.textContent="查不到這個航班，請手動輸入機場和時間。"; return; }
+      if(!r.found){ msg.style.color="var(--warm)"; msg.textContent=r.reason==="search"?"目前無法用 Google 搜尋查證航班，為避免填錯，請手動輸入機場和時間。":"查不到可確認的資料，為避免填錯，請手動輸入機場和時間。"; return; }
       $("#fNo").value=no; $("#fDep").value=r.dep; $("#fArr").value=r.arr; if(r.depT) $("#fDepT").value=r.depT; if(r.arrT) $("#fArrT").value=r.arrT; $("#fNext").checked=!!r.arrNext;
       if((r.depTerm||r.arrTerm)&&!$("#fTerm").value.trim()) $("#fTerm").value=[r.depTerm?`${r.dep} ${r.depTerm}`:"",r.arrTerm?`${r.arr} ${r.arrTerm}`:""].filter(Boolean).join("　→　");
       if(r.airline&&!$("#fNote").value.trim()) $("#fNote").value=r.airline;
-      msg.style.color=""; msg.innerHTML=`${ic("check")} 已帶入${r.airline?" "+esc(r.airline):""}・${r.grounded?"已用 Google 搜尋查證":"AI 推測"}，<b>請以機票上的時間為準</b>`;
+      msg.style.color=""; msg.innerHTML=`${ic("check")} 已帶入${r.airline?" "+esc(r.airline):""}・已用 Google 搜尋查證，<b>請以機票上的時間為準</b>`;
     }catch(e){ msg.style.color="var(--red)"; msg.textContent=/limit|次數/.test(e.message)?"今天的航班查詢次數已用完，明天再試":`暫時查不到，請稍後再試或手動輸入（${String(e.message||"").replace(/^push /,"錯誤 ").slice(0,60)}）`; } }));
   $("#fSave").onclick=lock(async()=>{
     const f={id:old?.id||uid(),no:U("#fNo").replace(/\s+/g,""),date:$("#fDate").value,dep:U("#fDep").replace(/[^A-Z]/g,""),depT:$("#fDepT").value||"",arr:U("#fArr").replace(/[^A-Z]/g,""),arrT:$("#fArrT").value||"",arrNext:$("#fNext").checked,

@@ -342,10 +342,8 @@ If the flight number does not exist or you are not reasonably sure of the route,
   let grounded = true;
   let r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } } }, ["gemini-flash-latest", "gemini-3.6-flash"], 30000);
   let o = r.ok ? pick(r.text) : null;
-  if (!o) { grounded = false;
-    r = await gemini(env, { contents: [{ parts: [{ text: ask }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 500, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } }, AI_MODELS, 25000);
-    o = r.ok ? pick(r.text) : null; }
-  if (!o) return json({ error: "ai", detail: (r.err || "AI 沒有回應").slice(0, 200) }, 502, origin);
+  // 只接受有 Google 搜尋查證的結果；AI 憑記憶推測實測會填錯機場和時間（例：IT230 猜成岡山 11:30），寧可不填
+  if (!o) return json({ ok: true, found: false, reason: r.ok ? "unverified" : "search", detail: r.ok ? "" : String(r.err || "").replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 160) }, 200, origin);
   const ap = x => /^[A-Z]{3}$/.test(String(x || "").toUpperCase()) ? String(x).toUpperCase() : "";
   const tm = x => { const m = /^(\d{1,2}):(\d{2})/.exec(String(x || "")); return m && +m[1] < 24 && +m[2] < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
   const out = { found: !!o.found && !!(ap(o.dep) && ap(o.arr)), airline: String(o.airline || "").slice(0, 30), dep: ap(o.dep), arr: ap(o.arr), depT: tm(o.depT), arrT: tm(o.arrT), arrNext: !!o.arrNext,
