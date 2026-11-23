@@ -744,7 +744,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.23-fa";
+const APP_VER = "2026.11.23-fb";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2955,7 +2955,7 @@ function flightSheet(t,old,back){
       if((r.depTerm||r.arrTerm)&&!$("#fTerm").value.trim()) $("#fTerm").value=[r.depTerm?`${r.dep} ${r.depTerm}`:"",r.arrTerm?`${r.arr} ${r.arrTerm}`:""].filter(Boolean).join("　→　");
       if(r.airline&&!$("#fNote").value.trim()) $("#fNote").value=r.airline;
       msg.style.color=""; msg.innerHTML=`${ic("check")} 已帶入${r.airline?" "+esc(r.airline):""}・${r.grounded?"已用 Google 搜尋查證":"AI 推測"}，<b>請以機票上的時間為準</b>`;
-    }catch(e){ msg.style.color="var(--red)"; msg.textContent=/limit|次數/.test(e.message)?"今天的航班查詢次數已用完，明天再試":"暫時查不到，請稍後再試或手動輸入"; } }));
+    }catch(e){ msg.style.color="var(--red)"; msg.textContent=/limit|次數/.test(e.message)?"今天的航班查詢次數已用完，明天再試":`暫時查不到，請稍後再試或手動輸入（${String(e.message||"").replace(/^push /,"錯誤 ").slice(0,60)}）`; } }));
   $("#fSave").onclick=lock(async()=>{
     const f={id:old?.id||uid(),no:U("#fNo").replace(/\s+/g,""),date:$("#fDate").value,dep:U("#fDep").replace(/[^A-Z]/g,""),depT:$("#fDepT").value||"",arr:U("#fArr").replace(/[^A-Z]/g,""),arrT:$("#fArrT").value||"",arrNext:$("#fNext").checked,
       term:$("#fTerm").value.trim(),code:U("#fCode").replace(/\s+/g,""),note:$("#fNote").value.trim()};

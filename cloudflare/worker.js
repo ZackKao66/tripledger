@@ -472,6 +472,18 @@ export default {
       }
       return new Response(JSON.stringify(out, null, 1), { headers: { "content-type": "application/json; charset=utf-8" } });
     }
+    if (req.method === "GET" && path === "/flight-test") {
+      // 診斷：航班 AI 帶入（Google 搜尋版、一般版各試一次，顯示原始回應或錯誤；不扣額度、不寫快取）
+      const no = (new URL(req.url).searchParams.get("no") || "BR198").toUpperCase();
+      const ask = `Flight ${no}. Return ONLY JSON {"found":true,"dep":"IATA","arr":"IATA","depT":"HH:MM","arrT":"HH:MM"}.`;
+      const out = { relay: !!env.GEMINI_RELAY, tests: [] };
+      for (const [name, body] of [["google_search", { contents: [{ parts: [{ text: ask }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 400 } }],
+                                  ["plain_json", { contents: [{ parts: [{ text: ask }] }], generationConfig: { temperature: 0.1, maxOutputTokens: 300, responseMimeType: "application/json" } }]]) {
+        const t0 = Date.now(); const r = await gemini(env, body, ["gemini-2.5-flash"], 30000);
+        out.tests.push({ name, ok: r.ok, secs: ((Date.now() - t0) / 1000).toFixed(1), reply: r.ok ? r.text.slice(0, 300) : undefined, error: r.ok ? undefined : String(r.err).replace(/AIza[0-9A-Za-z_\-]+/g, "***").slice(0, 400) });
+      }
+      return new Response(JSON.stringify(out, null, 1), { headers: { "content-type": "application/json; charset=utf-8" } });
+    }
     if (req.method === "GET" && path === "/resolve-test") {
       const q = new URL(req.url).searchParams.get("u") || "";
       if (!/^https:\/\/(maps\.app\.goo\.gl|goo\.gl|maps\.google\.[a-z.]+|www\.google\.[a-z.]+)\//.test(q)) return json({ error: "only google maps links" }, 400, origin);
