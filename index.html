@@ -744,7 +744,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.23-fs2";
+const APP_VER = "2026.11.24-rs";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -935,6 +935,11 @@ function savedPop(msg){ try{ localStorage.setItem("tripsplit_saved1","1"); }catc
   const d=document.createElement("div"); d.className="savedpop"; d.innerHTML=`<div class="sp-c"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7.5 7.5L38 19"/></svg></div><div class="sp-t">${esc(msg)}</div>`;
   document.body.appendChild(d); setTimeout(()=>d.classList.add("out"),900); setTimeout(()=>d.remove(),1250);
 }
+async function undoXfer(t,id){ const e=S.entries[id]; if(!e||RO()) return;
+  const who=`${nameOf(t,e.fromP||e.from)} → ${nameOf(t,e.toP||e.to)} ${mT(t,e.twd)}`;
+  if(!await confirmBox(`撤銷這筆轉帳？\n${who}\n${e.confirmed?"這筆已經確認收款，撤銷後會回到「尚需轉帳」，需要重新付款。":"撤銷後會回到「尚需轉帳」。"}`,"撤銷轉帳")) return;
+  try{ await Store.del(t.id,e); undoDelete(t.id,e,"已撤銷轉帳"); notify(t,"settle",`撤銷了轉帳：${who}`); }catch(_){} }
+document.addEventListener("click",ev=>{ const b=ev.target.closest&&ev.target.closest("[data-xf]"); if(!b||!S.tripId) return; ev.stopPropagation(); const t=S.trips[S.tripId]; t&&undoXfer(t,b.dataset.xf); },true);
 function undoDelete(tid,e,label="已刪除"){ toast(label,{label:"復原",fn:async()=>{ try{await Store.save(tid,e); toast("已復原")}catch(_){}}}); }
 /* 主題 */
 const THEMES=["auto","light","dark"], THEME_N={auto:"跟隨系統",light:"淺色",dark:"深色"};
@@ -961,7 +966,7 @@ function evalExpr(x){
 const exprShow=x=>String(x||"").replace(/\*/g,"×").replace(/\//g,"÷").replace(/-/g,"−").replace(/(\d+)(\.\d*)?/g,(m,a,b)=>Number(a).toLocaleString("zh-TW")+(b||""));
 function confirmBox(msg, okText="確定", danger=true){
   return new Promise(res=>{
-    $("#dlg").innerHTML=`<div style="font-size:15px;line-height:1.7;margin-bottom:18px">${esc(msg)}</div>
+    $("#dlg").innerHTML=`<div style="font-size:15px;line-height:1.7;margin-bottom:18px;white-space:pre-line">${esc(msg)}</div>
     <div class="two"><button class="btn line" id="dno">取消</button><button class="btn" style="${danger?"background:var(--red)":""}" id="dyes">${esc(okText)}</button></div>`;
     $("#dmask").classList.add("show");
     $("#dno").onclick=()=>{$("#dmask").classList.remove("show");res(false)};
@@ -1812,14 +1817,14 @@ const HELP=[
  ["invite","邀請旅伴",`<p>到旅程的「設定 › 旅伴與邀請」，把邀請傳到 LINE，會變成一張卡片。朋友點開、選個角色、輸入名字就加入了，不用註冊，而且只看得到這一趟的帳。</p><p>從 LINE 打開時，建議先點右下角選單選「以 Safari 開啟」，之後才能加入主畫面。</p>`],
  ["add","記一筆",`<p>按右下角「＋」，輸入當地金額，下方會即時換算台幣。上面的常用項目可以一鍵帶入之前記過的店家。</p><p>「大家分帳」會算進分帳；「只記自己」是私人花費，只有你看得到。</p><p>分攤方式可以選「以人平分」「以組平分」「依份數」（例如大人 2 份、小孩 1 份、沒喝酒的填 0）或「指定金額」。</p><p>畫面右上角有「掃描收據」時，可以拍收據自動帶入金額。按金額旁的 📍 貼上 Google 地圖連結，這筆就會出現在地圖上。</p><p>儲值卡（例如 Suica）建議只記「儲值」那一筆，搭車不用重複記；用信用卡儲值就選「信用卡」。</p><p>在紀錄上往左滑可以編輯、刪除，往右滑可以複製一筆。疑似重複輸入的會標示「可能重複」。沒網路時照常記帳，恢復連線後會自動同步給旅伴。</p>`],
  ["rate","匯率與手續費",`<p>現金：優先用你在錢包記錄的換匯成本，沒記錄時用臺銀「現金賣出」價。</p><p>刷卡、行動支付：用臺銀「即期賣出」價，再加國外交易手續費。多數信用卡是 1.5%，海外免手續費的卡請在「設定 › 記帳偏好」改成 0%。韓元、越南盾等沒有即期牌價的幣別，用現金買賣中價估算，實際以帳單為準。</p><p>刷卡結帳時請選「當地貨幣」。選台幣（DCC）匯率比較差，而且仍然會收手續費。</p><p>匯率表在大頭貼頁的「臺銀匯率表」。</p>`],
- ["split","分帳與結算",`<p>「分帳」頁會算出每個人付了多少、應付多少，並給出轉帳次數最少的結算建議。</p><p>情侶或家庭可以在「設定 › 分組」綁成一組，記帳時選「以組平分」，同一組只分攤一份。分帳頁可以切換「按組算」或「每人分開算」。</p><p>在大頭貼頁填好收款方式（銀行帳號、LINE Pay、街口），結算時對方可以一鍵複製轉帳資訊。付完按「已付款」，收款的人確認後就完成；還沒付的可以按「提醒」。</p><p>「結算圖卡」可以傳到 LINE 群組，「複製文字」可以貼給大家，也可以匯出 Excel。</p>`],
+ ["split","分帳與結算",`<p>「分帳」頁會算出每個人付了多少、應付多少，並給出轉帳次數最少的結算建議。</p><p>情侶或家庭可以在「設定 › 分組」綁成一組，記帳時選「以組平分」，同一組只分攤一份。分帳頁可以切換「按組算」或「每人分開算」。</p><p>在大頭貼頁填好收款方式（銀行帳號、LINE Pay、街口），結算時對方可以一鍵複製轉帳資訊。付完按「已付款」，收款的人確認後就完成；還沒付的可以按「提醒」。</p><p>按錯了？在「轉帳紀錄」點右邊的 ✕ 就能撤銷，已確認收款的也可以撤銷，撤銷後會回到「尚需轉帳」。公費「已還」按錯的話，點那筆帳目改成「之後再還」。</p><p>「結算圖卡」可以傳到 LINE 群組，「複製文字」可以貼給大家，也可以匯出 Excel。</p>`],
  ["kitty","公費",`<p>在「設定 › 公費」開啟並指定保管人。大家先繳一筆錢給保管人，記帳時付款人選「公費」就會從公費扣。</p><p>朋友先代墊、要公費還他：記帳時到「更多選項」選付款人，再開「由公費報銷」。保管人把錢還給他之後按「已還」，公費餘額就會扣掉。</p><p>公費金額一律以當地貨幣顯示，台幣小字是參考換算。剩不到 15% 時會提醒，旅程結束時多退少補。</p>`],
  ["cash","錢包與外幣現金",`<p>在「錢包」記下你換了多少外幣。用現金付款時會自動扣，也會用你實際換到的匯率算台幣，比牌告更準。剩不到 15% 時會提醒你再換匯或改刷卡；支出超過換匯紀錄時，代表可能有漏記的換匯。</p>`],
  ["card","信用卡對帳",`<p>刷卡金額一開始是用匯率估的。收到信用卡帳單後，到「統計 › 信用卡對帳」逐筆填入實際扣款的台幣金額，分帳和統計會立刻更新；留空就維持估算。旅程結束後，明細頁也會提醒你。</p>`],
  ["plan","行程",`<p>在「行程」頁按「新增行程 › 手動新增地點」，可以搜尋景點、餐廳，或貼上 Google 地圖的分享連結（在 Google 地圖按「分享 › 複製連結」）。中文找不到時會自動用 AI 辨識。</p><p>要先在「設定 › 旅程資訊」填好出發和回國日期，才能按天排行程。按住右側的拖曳圖示可以調整順序；地點也可以「複製到其他天」。</p><p>點開地點按「用 LINE 分享位置」，可以把地點和 Google 地圖連結傳給朋友；旅行當天的下一站也有「LINE 傳位置」快捷按鈕。每個地點也可以填訂位代號和連結，到現場點一下就能出示。天數列最右邊的「全覽」可以看整趟行程地圖，每天一個顏色。</p>`],
  ["stay","航班、住宿與交通",`<p>點行程頁上方的「住宿與交通」列，可以記下航班（航班號碼、起降機場和時間、航廈、訂位代號）。輸入航班號碼、選好日期後按「AI 帶入機場和時間」會自動填好，時間請再對照機票確認，當天的行程會自動出現航班卡：去程在最上面、回程在最下面，點一下就能出示訂位代號。</p><p>住宿填入住、退房日期後，每天的行程會自動從飯店出發、最後回飯店。也可以填訂房代號和訂單連結，飯店那一列點一下就能出示給櫃台。</p><p>交通方式（依距離自動、開車、大眾運輸、步行為主、計程車）設定一次就套用整趟，交通時間會依此計算；某一天不一樣（例如還車後改搭電車），可以在那天的標題旁單獨修改。剛落地或要去租車的那天，可以「設定今天的出發地」，例如機場或租車點。</p>`],
  ["ai","AI 排行程",`<p>按「新增行程 › AI 幫我排」，選好日期、喜好、步調和其他需求，AI 會推薦順路的景點和餐廳，你勾選確認後才會加入。</p><p>由 Google Gemini 產生，只會送出目的地、日期和喜好，不含任何帳目。其他需求寫短一點、具體一點（例如：想吃燒肉、下午去海邊）效果最好。</p>`],
- ["move","換手機與備份",`<p>免登入角色的資料跟著這支手機的瀏覽器。要搬到主畫面 App 或新手機，到大頭貼頁按「搬到主畫面 App／換手機」取得轉移碼，30 分鐘內在另一邊輸入。</p><p>想永久保險，可以「綁定 Google」，之後任何手機用同一個 Google 登入就能找回全部旅程，旅伴不受影響。</p><p>旅程的「設定 › 匯率與備份」可以匯出備份檔，之後在大頭貼頁「匯入備份檔」還原（不含收據照片）。</p>`],
+ ["move","換手機與備份",`<p>測試完想正式開始？到「設定」最下面按「清空帳目（保留旅程和旅伴）」，可以選擇只清帳目，或連行程、航班住宿一起清掉。只有旅程建立者看得到這個按鈕。</p><p>免登入角色的資料跟著這支手機的瀏覽器。要搬到主畫面 App 或新手機，到大頭貼頁按「搬到主畫面 App／換手機」取得轉移碼，30 分鐘內在另一邊輸入。</p><p>想永久保險，可以「綁定 Google」，之後任何手機用同一個 Google 登入就能找回全部旅程，旅伴不受影響。</p><p>旅程的「設定 › 匯率與備份」可以匯出備份檔，之後在大頭貼頁「匯入備份檔」還原（不含收據照片）。</p>`],
  ["notify","通知",`<p>把旅帳「加入主畫面」再從桌面打開，才能在大頭貼頁開啟通知。旅伴記帳、新增或調整行程、提醒付款、公費快用完時會馬上收到。每一種通知都可以在大頭貼頁單獨關閉。</p><p>如果通知被關掉了：iPhone 到「設定 › 通知 › 旅帳」開啟；Android 長按旅帳圖示 › App 資訊 › 通知。</p>`],
  ["end","旅程結束",`<p>旅程結束後可以看「旅程回顧」：這趟花了多少、去了哪裡，還能存成圖片分享。</p><p>大家都付清後，建立旅程的人可以「封存旅程」，旅程會鎖定成唯讀避免誤改，之後仍可重新開啟。</p>`],
 ];
@@ -2345,7 +2350,7 @@ function splitTab(t,C){
     ${C.transfers.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(e=>`<div class="prow">${av(t,e.fromP||e.from)}<span>${esc(nameOf(t,e.fromP||e.from))}</span><span class="arrow">→</span><span class="grow">${esc(nameOf(t,e.toP||e.to))}</span>
       <div style="text-align:right"><b>${mH(t,e.twd)}</b><div class="tiny">${useLocal(t)?ntdT(e.twd)+"・":""}${e.confirmed?`<span style="color:var(--ok)">已確認</span>`:"待收款人確認"}</div></div>
       ${!e.confirmed&&canConfirm(e)?`<button class="btn xs" data-confirm="${esc(e.id)}">確認收到</button>`:""}
-      ${!RO()&&!e.confirmed?`<button class="iconbtn" style="width:40px;height:40px" data-undo="${esc(e.id)}">${ic("x")}</button>`:""}</div>`).join("")}
+      ${!RO()?`<button class="iconbtn" style="width:40px;height:40px" data-undo="${esc(e.id)}" aria-label="撤銷這筆轉帳">${ic("x")}</button>`:""}</div>`).join("")}
   </div>`:""}
   <div class="btnrow" style="margin-top:4px"><button class="btn line" id="imgSettle">${ic("image")}結算圖卡</button><button class="btn line" id="copySettle">${ic("copy")}複製文字</button></div>
   ${cardTodo.length?`<div class="tiny" style="margin-top:12px">有 ${cardTodo.length} 筆刷卡是預估金額，收到帳單後可到「統計 › 信用卡對帳」更新。</div>`:`<div class="note g">${useLocal(t)?`金額以臺銀即期賣出 ${rateFmt(dispRate(t))} 換算成${CUR[t.currency]||t.currency}顯示，下方灰字為台幣。可用當地現金或等值台幣轉帳；`:""}刷卡手續費已併入分攤。</div>`}`;
@@ -2387,7 +2392,7 @@ function walletTab(t,C){
   kitIns.forEach(e=>led.push({e,ts:e.createdAt||0,dir:"in",who:e.member,title:`${nameOf(t,e.member)} 繳交`,a:e.cur!=="TWD"?curT(e.amount,e.cur):ntdT(e.twd),sub:e.cur!=="TWD"?ntdT(e.twd):"",attr:`data-rec="${esc(e.id)}"`}));
   C.all.filter(e=>e.kind==="exchange"&&e.member===KITTY).forEach(e=>led.push({e,ts:e.createdAt||0,dir:"ex",who:KITTY,title:"公費換匯",a:`+${curT(e.amount,e.cur)}`,sub:`−${ntdT(e.twd)}`,attr:`data-rec="${esc(e.id)}"`}));
   C.exps.filter(e=>e.payer===KITTY).forEach(e=>led.push({e,ts:e.createdAt||0,dir:"out",who:KITTY,title:e.title||catOf(t,e.cat).name,a:`−${e.cur!=="TWD"?curT(e.amount,e.cur):ntdT(finalTWD(e))}`,sub:e.cur!=="TWD"?ntdT(finalTWD(e)):"",attr:`data-exp="${esc(e.id)}" data-p="0"`,icon:catOf(t,e.cat).icon}));
-  C.transfers.filter(e=>e.from===KITTY||e.to===KITTY).forEach(e=>led.push({e,ts:e.createdAt||0,dir:e.from===KITTY?"out":"in",who:e.from===KITTY?(e.toP||e.to):(e.fromP||e.from),title:e.from===KITTY?`退還給 ${nameOf(t,e.toP||e.to)}`:`${nameOf(t,e.fromP||e.from)} 補繳`,a:`${e.from===KITTY?"−":"+"}${ntdT(e.twd)}`,sub:e.confirmed?"已確認":"待確認",attr:""}));
+  C.transfers.filter(e=>e.from===KITTY||e.to===KITTY).forEach(e=>led.push({e,ts:e.createdAt||0,dir:e.from===KITTY?"out":"in",who:e.from===KITTY?(e.toP||e.to):(e.fromP||e.from),title:e.from===KITTY?`退還給 ${nameOf(t,e.toP||e.to)}`:`${nameOf(t,e.fromP||e.from)} 補繳`,a:`${e.from===KITTY?"−":"+"}${ntdT(e.twd)}`,sub:e.confirmed?"已確認":"待確認",attr:RO()?"":`data-xf="${esc(e.id)}"`}));
   C.reimbDone.forEach(e=>led.push({e,ts:e.reimbAt||e.createdAt||0,dir:"out",who:e.payer,title:`報銷給 ${nameOf(t,e.payer)}：${e.title||catOf(t,e.cat).name}`,a:`−${e.cur!=="TWD"?curT(e.amount,e.cur):ntdT(finalTWD(e))}`,sub:e.cur!=="TWD"?ntdT(finalTWD(e)):"",attr:`data-exp="${esc(e.id)}" data-p="0"`}));
   led.sort((x,y)=>y.ts-x.ts);
   const ledRow=r=>`<div class="krow" ${r.attr} style="${r.attr?"cursor:pointer":""}">${r.dir==="out"&&r.icon?`<span class="ic sm">${ic(r.icon)}</span>`:av(t,r.who)}
@@ -3760,10 +3765,44 @@ function setTab(t){
     <button class="btn line" id="backupBtn" style="margin-top:12px">${ic("download")}匯出備份檔</button>
     <div class="tiny" style="margin-top:6px">可在大頭貼頁「匯入備份檔」還原（不含收據照片）</div>`)}
   <button class="btn line" id="helpBtn" style="margin:4px 0 12px;gap:10px">${ic("receipt")}使用說明</button>
-  ${RO()?"":isOwnerOf(t)?`<button class="btn danger" id="delTrip" style="margin-top:8px">刪除旅程</button>`:`<div class="tiny" style="text-align:center;padding:6px 0 10px">刪除旅程與移除旅伴僅限建立者操作</div>`}`;
+  ${RO()?"":isOwnerOf(t)?`<button class="btn line" id="resetTrip" style="margin-top:8px;color:var(--red)">清空帳目（保留旅程和旅伴）</button><button class="btn danger" id="delTrip" style="margin-top:8px">刪除旅程</button>`:`<div class="tiny" style="text-align:center;padding:6px 0 10px">刪除旅程與移除旅伴僅限建立者操作</div>`}`;
 }
 
+function resetSheet(t){
+  const n=Object.keys(S.entries).length, np=Object.values(S.priv).filter(e=>e.tripId===t.id||!e.tripId).length, npl=Object.keys(S.plan||{}).length, nfs=(t.flights||[]).length+(t.stays||[]).length;
+  const opt=(id,on,tt,sub)=>`<label class="prow" style="cursor:pointer;align-items:flex-start"><input type="checkbox" id="${id}" ${on?"checked":""} style="margin-top:3px;width:20px;height:20px;flex:none"><div class="grow" style="min-width:0;flex:1 1 0"><div style="font-weight:600">${tt}</div><div class="tiny">${sub}</div></div></label>`;
+  openSheet(`<h3>清空帳目</h3><div class="sec-d">適合測試完要正式開始記帳時使用。旅程名稱、日期、旅伴和邀請連結都會保留。</div>
+    <div class="sec tight">${opt("rsE",true,`所有帳目、公費、換匯與轉帳（${n} 筆）`,"全部旅伴的共同帳都會清掉，分帳和公費歸零")}
+      ${opt("rsP",true,`我的私人花費（${np} 筆）`,"其他旅伴的私人花費存在他們自己的手機帳號，不會被清掉")}
+      ${opt("rsPl",false,`行程與想去清單（${npl} 個地點）`,"想保留排好的行程就不要勾")}
+      ${opt("rsF",false,`航班與住宿（${nfs} 筆）`,"想保留訂好的機票和飯店就不要勾")}</div>
+    <div class="note" style="margin-top:10px">清空後無法復原。不確定的話，可以先到「匯率與備份」匯出備份檔。</div>
+    <button class="btn danger" id="rsGo" style="margin-top:16px">清空勾選的資料</button>
+    <button class="btn line" style="margin-top:10px" onclick="closeSheet()">取消</button>`);
+  $("#rsGo").onclick=lock(async()=>{
+    const E=$("#rsE").checked, P=$("#rsP").checked, PL=$("#rsPl").checked, F=$("#rsF").checked;
+    if(!E&&!P&&!PL&&!F){ toast("請至少勾選一項"); return; }
+    if(!await confirmBox(`確定清空「${t.name}」勾選的資料？此動作無法復原。`,"清空")) return;
+    toast("清空中…");
+    try{
+      if(db){
+        const run=async ps=>{ for(let i=0;i<ps.length;i+=20) await Promise.all(ps.slice(i,i+20).map(f=>f())); };
+        if(E) await run(Object.keys(S.entries).map(k=>()=>guard(db.doc(`trips/${t.id}/expenses/${k}`).delete())));
+        if(P) await run(Object.keys(S.priv).map(k=>()=>guard(db.doc(`users/${S.uid}/private/${k}`).delete())));
+        if(PL) await run(Object.keys(S.plan||{}).map(k=>()=>guard(db.doc(`trips/${t.id}/plan/${k}`).delete())));
+      }else{
+        if(E||P){ const ex=local.expenses[t.id]||{}; for(const k of Object.keys(ex)) if((E&&!ex[k].private)||(P&&ex[k].private)) delete ex[k]; }
+        if(PL&&local.plan) delete local.plan[t.id]; lsave(); localSplit(t.id); if(PL) S.plan={};
+      }
+      const cur=S.trips[t.id]||t; let nt={...cur};
+      if(F) nt={...nt,flights:[],stays:[]};
+      if(F) { await Store.saveTrip(nt); S.trips={...S.trips,[t.id]:nt}; }
+      closeSheet(); render(); toast("已清空，可以開始正式記帳了");
+    }catch(e){ toast("清空未完成，請再試一次"); }
+  });
+}
 function bindTrip(t){
+  $("#resetTrip")&&($("#resetTrip").onclick=()=>resetSheet(t));
   $("#back").onclick=navBack;
   $$("details.set").forEach(d=>d.addEventListener("toggle",()=>{ S.setOpen={...(S.setOpen||{members:true}),[d.dataset.sk]:d.open}; }));
   $("#setFee")&&!RO()&&($("#setFee").onchange=async e=>{ const v=parseNum(e.target.value); if(v===Number(t.cardFee??1.5)) return; try{await Store.saveTrip({...t,cardFee:v}); toast("已更新手續費")}catch(_){} });
@@ -3869,7 +3908,7 @@ function bindTripRest(t){
     }
   }));
   $$("[data-confirm]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.confirm]; if(!e)return; try{await Store.save(t.id,{...e,confirmed:true,confirmedBy:S.uid||null,confirmedAt:Date.now()}); notify(t,"settle",`${nameOf(t,e.toP||e.to)} 已確認收到 ${nameOf(t,e.fromP||e.from)} 的 ${mT(t,e.twd)}`); toast("已確認收款")}catch(_){}});
-  $$("[data-undo]").forEach(b=>b.onclick=async()=>{const e=S.entries[b.dataset.undo]; if(!e)return; try{await Store.del(t.id,e); undoDelete(t.id,e,"已撤銷轉帳紀錄")}catch(_){}});
+  $$("[data-undo]").forEach(b=>b.onclick=()=>undoXfer(t,b.dataset.undo));
   if($("#setStart")&&!RO()){ const n=()=>{$("#setLen").textContent=tripLen($("#setStart").value,$("#setEnd").value)}; linkDates($("#setStart"),$("#setEnd"),n); n(); }
   $("#addMember")&&($("#addMember").onclick=async()=>{
     const n=$("#newMember").value.trim(); if(!n) return;
