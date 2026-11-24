@@ -744,7 +744,7 @@ function makeDB(){
 
 /* ===================== 常數 ===================== */
 const APP_URL = location.origin+location.pathname;
-const APP_VER = "2026.11.24-rs";
+const APP_VER = "2026.11.24-sb";
 const KITTY = "__kitty";
 // 臺灣銀行牌告（備援；雲端版讀取每日更新的牌告）[現金買入, 現金賣出, 即期買入, 即期賣出]
 const BOT_FALLBACK = {updatedAt:"2026/11/15 09:25", rates:{
@@ -2906,8 +2906,8 @@ const stayOn=(t,day)=>day&&/^\d{4}-/.test(day)?staysOf(t).find(x=>day>=x.checkin
 const hotelPt=(x,kind)=>x&&x.geo?{id:"__h_"+kind,name:x.name,geo:x.geo,cat:"hotel",hotel:kind}:null;
 function stayBar(t){
   const st=staysOf(t), m=TMODES.find(x=>x[0]===(t.travelMode||""));
-  const dr=t.start?`${t.start.slice(5).replace("-","/")}${t.end&&t.end!==t.start?"–"+t.end.slice(5).replace("-","/"):""}`:"";
-  return `<button class="staybar" id="stayBar"><span class="grow">${dr?`${ic("calendar")}<span class="num">${dr}</span><span class="sbsep">・</span>`:""}${ic("hotel")}<span class="sbt">${st.length?esc(st[0].name)+(st.length>1?` 等 ${st.length} 間`:""):"設定住宿"}</span><span class="sbsep">・</span>${ic(m[2])}${t.travelMode?m[1]:"交通"}</span>${ic("chev")}</button>`;
+  const fl=fltsOf(t), ft=fl.length?(fl.length===1?esc(fl[0].no||"1 班"):`${fl.length} 班`):"航班";
+  return `<button class="staybar" id="stayBar" aria-label="航班、住宿與交通"><span class="grow">${ic("flight")}<span class="num" style="flex:none;${fl.length?"":"opacity:.7"}">${ft}</span><span class="sbsep">・</span>${ic("hotel")}<span class="sbt">${st.length?esc(st[0].name)+(st.length>1?` 等 ${st.length} 間`:""):"設定住宿"}</span><span class="sbsep">・</span>${ic(m[2])}${t.travelMode?m[1]:"交通"}</span>${ic("chev")}</button>`;
 }
 /* 航班：記在旅程上，當天的行程會自動顯示（去程在最上面、回程在最下面） */
 const TW_AP=new Set(["TPE","TSA","KHH","RMQ","TNN","KNH","MZG","HUN","TTT","CYI"]);
